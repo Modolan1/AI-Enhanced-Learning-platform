@@ -5,6 +5,136 @@ import Card from '../../components/common/Card';
 import Button from '../../components/common/Button';
 import { studentService } from '../../services/studentService';
 
+const ACTIVITY_FILTERS = [
+  { key: 'all', label: 'All' },
+  { key: 'learning', label: 'Learning' },
+  { key: 'assessment', label: 'Assessment' },
+  { key: 'profile', label: 'Profile' },
+  { key: 'documents', label: 'Documents' },
+];
+
+function getBadgeClass(category) {
+  if (category === 'learning') return 'bg-teal-100 text-teal-700';
+  if (category === 'assessment') return 'bg-amber-100 text-amber-700';
+  if (category === 'profile') return 'bg-sky-100 text-sky-700';
+  if (category === 'documents') return 'bg-violet-100 text-violet-700';
+  return 'bg-slate-100 text-slate-700';
+}
+
+function formatRelativeTime(dateValue) {
+  if (!dateValue) return 'just now';
+  const date = new Date(dateValue);
+  const seconds = Math.max(1, Math.round((Date.now() - date.getTime()) / 1000));
+
+  if (seconds < 60) return `${seconds}s ago`;
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.round(hours / 24);
+  return `${days}d ago`;
+}
+
+function mapActivity(activity) {
+  const metadata = activity.metadata || {};
+  const resourceId = activity.resourceId;
+
+  switch (activity.activityType) {
+    case 'course_enrollment':
+      return {
+        category: 'learning',
+        badge: 'Learning',
+        title: 'Enrolled in a course',
+        detail: metadata.title || 'New course enrollment completed',
+        link: resourceId ? `/student/courses/${resourceId}` : '/student/courses',
+        linkLabel: 'Open course',
+      };
+    case 'lesson_view':
+      return {
+        category: 'learning',
+        badge: 'Learning',
+        title: 'Lesson opened',
+        detail: `${metadata.courseTitle || 'Course'} • ${metadata.lessonTitle || 'Lesson'}`,
+        link: resourceId != null && Number.isInteger(metadata.lessonIndex)
+          ? `/student/courses/${resourceId}/lessons/${metadata.lessonIndex}`
+          : '/student/courses',
+        linkLabel: 'Resume lesson',
+      };
+    case 'lesson_complete':
+      return {
+        category: 'learning',
+        badge: 'Learning',
+        title: 'Lesson completed',
+        detail: `${metadata.courseTitle || 'Course'} • ${metadata.lessonTitle || 'Lesson'}`,
+        link: resourceId ? `/student/courses/${resourceId}` : '/student/courses',
+        linkLabel: 'View progress',
+      };
+    case 'quiz_submit':
+      return {
+        category: 'assessment',
+        badge: 'Assessment',
+        title: 'Quiz submitted',
+        detail: `${metadata.title || 'Quiz'} • ${metadata.percentage ?? 0}% score`,
+        link: '/student/quizzes',
+        linkLabel: 'Go to quizzes',
+      };
+    case 'flashcard_review':
+      return {
+        category: 'assessment',
+        badge: 'Assessment',
+        title: 'Flashcard reviewed',
+        detail: metadata.courseTitle || metadata.question || 'Flashcard practice session',
+        link: '/student/flashcards',
+        linkLabel: 'Continue practice',
+      };
+    case 'document_analyze':
+      return {
+        category: 'documents',
+        badge: 'Documents',
+        title: 'Document analyzed',
+        detail: metadata.fileName || 'PDF processed for study pack',
+        link: '/student/documents',
+        linkLabel: 'Open documents',
+      };
+    case 'document_quiz_submit':
+      return {
+        category: 'documents',
+        badge: 'Documents',
+        title: 'Document quiz submitted',
+        detail: `${metadata.fileName || 'Document'} • ${metadata.percentage ?? 0}% score`,
+        link: '/student/documents',
+        linkLabel: 'Review attempts',
+      };
+    case 'subscription_update':
+      return {
+        category: 'profile',
+        badge: 'Profile',
+        title: 'Subscription updated',
+        detail: `${metadata.status || 'updated'} • ${metadata.plan || 'monthly'} plan`,
+        link: '/student/study-helper',
+        linkLabel: 'Manage subscription',
+      };
+    case 'profile_update':
+      return {
+        category: 'profile',
+        badge: 'Profile',
+        title: 'Profile updated',
+        detail: 'Learning preferences and account details changed',
+        link: '/student/profile',
+        linkLabel: 'Open profile',
+      };
+    default:
+      return {
+        category: 'learning',
+        badge: 'Learning',
+        title: activity.activityType.replace(/_/g, ' '),
+        detail: activity.resourceType,
+        link: null,
+        linkLabel: '',
+      };
+  }
+}
+
 export default function StudentDashboardPage() {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
@@ -13,6 +143,9 @@ export default function StudentDashboardPage() {
   const [courses, setCourses] = useState([]);
   const [selectedCategoryId, setSelectedCategoryId] = useState('all');
   const [selectedCourseId, setSelectedCourseId] = useState('all');
+  const [refreshingActivity, setRefreshingActivity] = useState(false);
+  const [activityFilter, setActivityFilter] = useState('all');
+  const [showAllActivities, setShowAllActivities] = useState(false);
 
   const resolveAssetUrl = (url) => {
     if (!url) return '';
@@ -69,6 +202,14 @@ export default function StudentDashboardPage() {
   }, []);
 
   useEffect(() => {
+    const intervalId = setInterval(() => {
+      load();
+    }, 45000);
+
+    return () => clearInterval(intervalId);
+  }, []);
+
+  useEffect(() => {
     if (selectedCategoryId === 'all') return;
     const selectedCourseStillValid = courses.some((course) => String(course._id) === selectedCourseId && String(course?.category?._id || course?.category || '') === selectedCategoryId);
     if (!selectedCourseStillValid) {
@@ -101,6 +242,24 @@ export default function StudentDashboardPage() {
   });
 
   const visibleDocuments = filteredDocuments.slice(0, 8);
+  const mappedActivities = (data.recentActivity || []).map((activity) => ({
+    raw: activity,
+    item: mapActivity(activity),
+  }));
+
+  const activityCounts = mappedActivities.reduce((acc, entry) => {
+    const category = entry.item.category;
+    acc.all += 1;
+    if (acc[category] != null) acc[category] += 1;
+    return acc;
+  }, { all: 0, learning: 0, assessment: 0, profile: 0, documents: 0 });
+
+  const visibleActivities = mappedActivities.filter((entry) => activityFilter === 'all' || entry.item.category === activityFilter);
+  const defaultVisibleActivityCount = 4;
+  const displayedActivities = showAllActivities
+    ? visibleActivities
+    : visibleActivities.slice(0, defaultVisibleActivityCount);
+  const hasMoreActivities = visibleActivities.length > defaultVisibleActivityCount;
 
   return (
     <StudentLayout>
@@ -121,12 +280,54 @@ export default function StudentDashboardPage() {
       </div>
 
       <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-6">
-        <Card><p className="text-sm text-slate-500">Available Courses</p><h3 className="mt-2 text-3xl font-bold">{data.stats.availableCourses}</h3></Card>
+        <Card><p className="text-sm text-slate-500">Enrolled Courses</p><h3 className="mt-2 text-3xl font-bold">{data.stats.enrolledCourses || 0}</h3></Card>
         <Card><p className="text-sm text-slate-500">Completed Modules</p><h3 className="mt-2 text-3xl font-bold">{data.stats.completedModules}</h3></Card>
         <Card><p className="text-sm text-slate-500">Quiz Average</p><h3 className="mt-2 text-3xl font-bold">{data.stats.avgQuizScore}%</h3></Card>
-        <Card><p className="text-sm text-slate-500">Recommendations</p><h3 className="mt-2 text-3xl font-bold">{data.stats.recommendations}</h3></Card>
-        <Card><p className="text-sm text-slate-500">Flashcards</p><h3 className="mt-2 text-3xl font-bold">{data.stats.flashcards}</h3></Card>
+        <Card><p className="text-sm text-slate-500">Enrolled Lessons</p><h3 className="mt-2 text-3xl font-bold">{data.stats.lessons || 0}</h3></Card>
+        <Card><p className="text-sm text-slate-500">Enrolled Quizzes</p><h3 className="mt-2 text-3xl font-bold">{data.stats.quizzes || 0}</h3></Card>
+        <Card><p className="text-sm text-slate-500">Enrolled Flashcards</p><h3 className="mt-2 text-3xl font-bold">{data.stats.flashcards || 0}</h3></Card>
         <Card><p className="text-sm text-slate-500">Saved Documents</p><h3 className="mt-2 text-3xl font-bold">{data.stats.documents || 0}</h3></Card>
+      </div>
+
+      <div className="mt-6 grid gap-6 lg:grid-cols-3">
+        <Card>
+          <h3 className="mb-4 text-lg font-semibold">Your Lessons</h3>
+          <div className="space-y-3">
+            {(data.lessons || []).slice(0, 5).map((lesson) => (
+              <Link key={`${lesson.courseId}-${lesson.lessonIndex}`} to={`/student/courses/${lesson.courseId}/lessons/${lesson.lessonIndex}`} className="block rounded-xl border p-3 hover:border-indigo-300">
+                <div className="text-sm font-medium text-slate-900">{lesson.courseTitle}</div>
+                <div className="text-sm text-slate-600">Lesson {lesson.lessonIndex + 1}: {lesson.title}</div>
+              </Link>
+            ))}
+            {!data.lessons?.length && <div className="text-sm text-slate-500">Enroll in a course to get lessons.</div>}
+          </div>
+        </Card>
+
+        <Card>
+          <h3 className="mb-4 text-lg font-semibold">Your Quizzes</h3>
+          <div className="space-y-3">
+            {(data.quizzes || []).slice(0, 5).map((quiz) => (
+              <div key={quiz._id} className="rounded-xl border p-3">
+                <div className="text-sm font-medium text-slate-900">{quiz.title}</div>
+                <div className="text-xs text-slate-500">{quiz.course?.title}</div>
+              </div>
+            ))}
+            {!data.quizzes?.length && <div className="text-sm text-slate-500">No quizzes for enrolled courses yet.</div>}
+          </div>
+        </Card>
+
+        <Card>
+          <h3 className="mb-4 text-lg font-semibold">Your Flashcards</h3>
+          <div className="space-y-3">
+            {(data.flashcards || []).slice(0, 5).map((card) => (
+              <div key={card._id} className="rounded-xl border p-3">
+                <div className="text-sm font-medium text-slate-900">{card.question}</div>
+                <div className="text-xs text-slate-500">{card.course?.title}</div>
+              </div>
+            ))}
+            {!data.flashcards?.length && <div className="text-sm text-slate-500">No flashcards for enrolled courses yet.</div>}
+          </div>
+        </Card>
       </div>
 
       {data.progress.length > 0 && (
@@ -187,14 +388,74 @@ export default function StudentDashboardPage() {
 
       <div className="mt-6 grid gap-6 lg:grid-cols-3">
         <Card>
-          <h3 className="mb-4 text-lg font-semibold">Recent Activity</h3>
+          <div className="mb-4 flex items-center justify-between">
+            <h3 className="text-lg font-semibold">Recent Activity</h3>
+            <Button
+              variant="secondary"
+              className="px-3 py-1.5 text-xs"
+              disabled={refreshingActivity}
+              onClick={async () => {
+                try {
+                  setRefreshingActivity(true);
+                  await load();
+                } finally {
+                  setRefreshingActivity(false);
+                }
+              }}
+            >
+              {refreshingActivity ? 'Refreshing...' : 'Refresh'}
+            </Button>
+          </div>
+
+          <div className="mb-4 flex flex-wrap gap-2">
+            {ACTIVITY_FILTERS.map((tab) => {
+              const isActive = activityFilter === tab.key;
+              return (
+                <button
+                  key={tab.key}
+                  type="button"
+                  onClick={() => setActivityFilter(tab.key)}
+                  className={`rounded-full px-3 py-1 text-xs font-semibold transition ${isActive ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                >
+                  {tab.label} ({activityCounts[tab.key] || 0})
+                </button>
+              );
+            })}
+          </div>
+
           <div className="space-y-3">
-            {data.recentActivity.map((activity) => (
-              <div key={activity._id} className="rounded-xl border p-4">
-                <div className="font-medium">{activity.activityType}</div>
-                <div className="text-sm text-slate-500">{activity.resourceType}</div>
-              </div>
-            ))}
+            {!visibleActivities.length && <div className="rounded-xl border border-dashed p-4 text-sm text-slate-500">No activity in this category yet.</div>}
+            {displayedActivities.map(({ raw: activity, item }) => {
+              return (
+                <div key={activity._id} className="rounded-xl border p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <span className={`mb-1 inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold ${getBadgeClass(item.category)}`}>
+                        {item.badge}
+                      </span>
+                      <div className="text-sm font-medium text-slate-900">{item.title}</div>
+                      <div className="text-xs text-slate-600">{item.detail}</div>
+                    </div>
+                    <div className="text-[11px] text-slate-500">{formatRelativeTime(activity.createdAt)}</div>
+                  </div>
+                  {item.link && (
+                    <Link to={item.link} className="mt-1 inline-block text-[11px] font-semibold text-indigo-600 hover:text-indigo-700">
+                      {item.linkLabel}
+                    </Link>
+                  )}
+                </div>
+              );
+            })}
+
+            {hasMoreActivities && (
+              <Button
+                variant="secondary"
+                className="w-full"
+                onClick={() => setShowAllActivities((prev) => !prev)}
+              >
+                {showAllActivities ? 'Show Less' : `View More (${visibleActivities.length - defaultVisibleActivityCount})`}
+              </Button>
+            )}
           </div>
         </Card>
 

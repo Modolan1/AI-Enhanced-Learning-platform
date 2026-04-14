@@ -4,12 +4,21 @@ import { protect } from '../middleware/authMiddleware.js';
 import { authorizeRoles } from '../middleware/roleMiddleware.js';
 import { validateObjectId } from '../middleware/validateObjectId.js';
 import { validate } from '../middleware/validate.js';
-import { updateProfileSchema, submitQuizSchema, askQuestionSchema, submitDocumentQuizSchema } from '../schemas/studentSchemas.js';
+import {
+  updateProfileSchema,
+  submitQuizSchema,
+  askQuestionSchema,
+  submitDocumentQuizSchema,
+  completeLessonSchema,
+  simulateSubscriptionSchema,
+  payForCourseSchema,
+  confirmCoursePaymentSchema,
+} from '../schemas/studentSchemas.js';
 import { env } from '../config/env.js';
 import {
-  getDashboard, getProfile, updateProfile, getCourses, getCourseDetail, enrollCourse, getFlashcards, trackFlashcardReview, getQuizzes,
+  getDashboard, getProfile, updateProfile, getCourses, getCourseDetail, getLessonDetail, enrollCourse, payForCourse, createStripeCourseCheckoutSession, confirmCoursePayment, completeLesson, getSubscription, simulateSubscription, getFlashcards, trackFlashcardReview, getQuizzes,
   submitQuiz, getAttempts, getRecommendations, refreshRecommendations, getDocumentUploadConfig,
-  analyzeDocument, submitGeneratedDocumentQuiz, getDocumentHistory, getDocumentById, deleteDocument, askDocumentQuestion,
+  analyzeDocument, submitGeneratedDocumentQuiz, getDocumentHistory, getDocumentById, deleteDocument, askDocumentQuestion, generateStructuredContent,
   getInstructorLearningContent
 } from '../controllers/studentController.js';
 
@@ -47,7 +56,15 @@ router.get('/profile', getProfile);
 router.put('/profile', validate(updateProfileSchema), updateProfile);
 router.get('/courses', getCourses);
 router.get('/courses/:id', validateObjectId, getCourseDetail);
+router.get('/courses/:id/lessons/:lessonIndex', validateObjectId, getLessonDetail);
 router.post('/courses/:id/enroll', validateObjectId, enrollCourse);
+router.post('/courses/:id/pay', validateObjectId, validate(payForCourseSchema), payForCourse);
+router.post('/courses/:id/pay/stripe/checkout-session', validateObjectId, createStripeCourseCheckoutSession);
+router.post('/courses/:id/pay/confirm', validateObjectId, validate(confirmCoursePaymentSchema), confirmCoursePayment);
+router.post('/courses/:id/lessons/:lessonIndex/complete', validateObjectId, validate(completeLessonSchema), completeLesson);
+router.get('/subscription', getSubscription);
+router.post('/subscription/simulate', validate(simulateSubscriptionSchema), simulateSubscription);
+router.post('/generate-content', generateStructuredContent);
 router.get('/flashcards', getFlashcards);
 router.post('/flashcards/:id/review', validateObjectId, trackFlashcardReview);
 router.get('/quizzes', getQuizzes);

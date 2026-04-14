@@ -4,6 +4,10 @@ const moduleSchema = new mongoose.Schema({
   title: { type: String, required: true, trim: true },
   durationMinutes: { type: Number, default: 20 },
   type: { type: String, enum: ['video', 'reading', 'exercise', 'project'], default: 'reading' },
+  textContent: { type: String, default: '' },
+  videoUrl: { type: String, default: '' },
+  resourceUrl: { type: String, default: '' },
+  resourceTitle: { type: String, default: '' },
 }, { _id: false });
 
 const courseSchema = new mongoose.Schema({
@@ -11,11 +15,15 @@ const courseSchema = new mongoose.Schema({
   description: { type: String, default: '' },
   category: { type: mongoose.Schema.Types.ObjectId, ref: 'Category', required: true },
   level: { type: String, enum: ['Beginner', 'Intermediate', 'Advanced'], default: 'Beginner' },
+  price: { type: Number, default: 49.99, min: 0 },
+  currency: { type: String, default: 'USD' },
   durationHours: { type: Number, default: 1 },
   thumbnail: { type: String, default: '' },
   modules: { type: [moduleSchema], default: [] },
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   isPublished: { type: Boolean, default: true },
+  rating: { type: Number, default: 0, min: 0, max: 5 },
+  reviewCount: { type: Number, default: 0, min: 0 },
 }, { timestamps: true });
 
 export default mongoose.model('Course', courseSchema);

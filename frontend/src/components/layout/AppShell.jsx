@@ -118,11 +118,9 @@ export default function AppShell({ children, navItems, title }) {
                 </button>
 
                 {isNotificationOpen && (
-                  <div className="absolute right-0 z-30 mt-2 w-[320px] rounded-2xl border border-slate-200 bg-white p-3 shadow-xl">
                   <div className="absolute right-0 z-30 mt-2 w-[320px] rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-xl backdrop-blur">
                       <p className="text-sm font-semibold text-slate-900">Updates</p>
                       <span className="text-xs text-slate-500">Instructor & Admin</span>
-                    </div>
 
                     {!visibleUpdates.length && (
                       <p className="rounded-xl bg-slate-50 px-3 py-4 text-sm text-slate-500">No updates yet.</p>

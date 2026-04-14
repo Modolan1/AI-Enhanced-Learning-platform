@@ -45,10 +45,33 @@ const [course1, course2] = await Course.create([
     level: 'Beginner', durationHours: 12, createdBy: admin._id,
     thumbnail: 'https://images.unsplash.com/photo-1633356122544-f134324a6cee?w=800',
     modules: [
-      { title: 'JSX and Components', durationMinutes: 35, type: 'reading' },
-      { title: 'Props and Reusability', durationMinutes: 30, type: 'video' },
-      { title: 'State and Events', durationMinutes: 40, type: 'exercise' },
-      { title: 'Mini Project Dashboard', durationMinutes: 55, type: 'project' },
+      {
+        title: 'JSX and Components',
+        durationMinutes: 35,
+        type: 'reading',
+        textContent: 'Learn how JSX maps UI structure to React components. Focus on component composition and prop-driven rendering.',
+        resourceUrl: 'https://react.dev/learn/your-first-component',
+        resourceTitle: 'React Docs: Your First Component',
+      },
+      {
+        title: 'Props and Reusability',
+        durationMinutes: 30,
+        type: 'video',
+        textContent: 'Understand one-way data flow and design components for reusability.',
+        videoUrl: 'https://www.youtube.com/watch?v=SqcY0GlETPk',
+      },
+      {
+        title: 'State and Events',
+        durationMinutes: 40,
+        type: 'exercise',
+        textContent: 'Practice local state updates with event handlers and controlled inputs.',
+      },
+      {
+        title: 'Mini Project Dashboard',
+        durationMinutes: 55,
+        type: 'project',
+        textContent: 'Build a mini dashboard that combines components, state, and reusable cards.',
+      },
     ],
   },
   {
@@ -56,9 +79,25 @@ const [course1, course2] = await Course.create([
     level: 'Beginner', durationHours: 8, createdBy: admin._id,
     thumbnail: 'https://images.unsplash.com/photo-1635070041078-e363dbe005cb?w=800',
     modules: [
-      { title: 'Working with Variables', durationMinutes: 25, type: 'reading' },
-      { title: 'Linear Equations', durationMinutes: 45, type: 'exercise' },
-      { title: 'Expressions and Simplification', durationMinutes: 35, type: 'video' },
+      {
+        title: 'Working with Variables',
+        durationMinutes: 25,
+        type: 'reading',
+        textContent: 'Variables represent unknown values. Practice translating word statements into algebraic form.',
+      },
+      {
+        title: 'Linear Equations',
+        durationMinutes: 45,
+        type: 'exercise',
+        textContent: 'Solve equations by applying inverse operations to both sides step by step.',
+      },
+      {
+        title: 'Expressions and Simplification',
+        durationMinutes: 35,
+        type: 'video',
+        textContent: 'Combine like terms and simplify algebraic expressions with consistent rules.',
+        videoUrl: 'https://www.youtube.com/watch?v=NybHckSEQBI',
+      },
     ],
   },
 ]);

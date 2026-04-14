@@ -10,8 +10,107 @@ import { documentStudyPackRepository } from '../repositories/documentStudyPackRe
 import { instructorContentRepository } from '../repositories/instructorContentRepository.js';
 import { aiRecommendationService } from './aiRecommendationService.js';
 import { aiDocumentService } from './aiDocumentService.js';
+import { stripeService } from './stripeService.js';
 import { env } from '../config/env.js';
 import { PDFParse } from 'pdf-parse';
+
+const DEFAULT_FAQ = [
+  {
+    question: 'How should I study this lesson effectively?',
+    answer: 'Use a 3-step loop: skim lesson goals, study for 20-30 minutes, then self-check with quiz questions or flashcards.',
+  },
+  {
+    question: 'What should I do if I fail a quiz?',
+    answer: 'Review incorrect questions first, revisit the related lesson module, and retry after summarizing key concepts in your own words.',
+  },
+  {
+    question: 'How often should I revise?',
+    answer: 'Aim for quick reviews within 24 hours, then again after 3 days and 7 days for better long-term retention.',
+  },
+];
+
+const buildLessonText = (courseTitle, module, index) => {
+  if (module.textContent) return module.textContent;
+
+  return `Lesson ${index + 1}: ${module.title}\n\nThis lesson is part of ${courseTitle}. Focus on understanding the core idea, then apply it with a short practice task. Finish by writing a quick 3-bullet summary of what you learned.`;
+};
+
+const normalizeLesson = (course, module, index) => ({
+  lessonIndex: index,
+  title: module.title,
+  type: module.type,
+  durationMinutes: module.durationMinutes || 20,
+  textContent: buildLessonText(course.title, module, index),
+  videoUrl: module.videoUrl || '',
+  resource: module.resourceUrl
+    ? {
+      url: module.resourceUrl,
+      title: module.resourceTitle || `${module.title} Resource`,
+    }
+    : null,
+});
+
+const getCourseAttempts = (attempts, courseId) => attempts.filter((attempt) => String(attempt?.quiz?.course?._id || attempt?.quiz?.course) === String(courseId));
+
+const buildRevisionTopics = (quizzes, courseAttempts) => {
+  const quizById = new Map(quizzes.map((quiz) => [String(quiz._id), quiz]));
+  const topics = new Map();
+
+  courseAttempts.forEach((attempt) => {
+    const quiz = quizById.get(String(attempt?.quiz?._id || attempt?.quiz));
+    if (!quiz) return;
+
+    quiz.questions.forEach((question, index) => {
+      if ((attempt.answers || [])[index] === question.correctAnswer) return;
+      const key = question.questionText || `Question ${index + 1}`;
+      topics.set(key, (topics.get(key) || 0) + 1);
+    });
+  });
+
+  return [...topics.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([topic, missedCount]) => ({ topic, missedCount }));
+};
+
+const buildStudyHelper = ({ course, progress, quizzes, attempts }) => {
+  const lessons = (course.modules || []).map((module, index) => normalizeLesson(course, module, index));
+  const completedModules = progress?.completedModules || 0;
+  const nextIndex = lessons.length ? Math.min(completedModules, lessons.length - 1) : 0;
+  const recommendedNextLesson = lessons.length
+    ? {
+      ...lessons[nextIndex],
+      isAlreadyCompleted: nextIndex < completedModules,
+    }
+    : null;
+
+  const courseAttempts = getCourseAttempts(attempts, course._id);
+  const suggestedRevisionTopics = buildRevisionTopics(quizzes, courseAttempts);
+
+  return {
+    recommendedNextLesson,
+    suggestedRevisionTopics,
+    faq: DEFAULT_FAQ,
+  };
+};
+
+const getEnrolledCourseIds = (progress = []) => new Set(
+  progress
+    .map((item) => String(item?.course?._id || item?.course || ''))
+    .filter(Boolean)
+);
+
+const getPaidCourseIds = (progress = []) => new Set(
+  progress
+    .filter((item) => item?.paymentStatus === 'paid')
+    .map((item) => String(item?.course?._id || item?.course || ''))
+    .filter(Boolean)
+);
+
+const filterByEnrolledCourse = (items = [], enrolledCourseIds, getCourseId) => items.filter((item) => {
+  const courseId = String(getCourseId(item) || '');
+  return courseId && enrolledCourseIds.has(courseId);
+});
 
 export const studentService = {
   getProfile: (studentId) => userRepository.findStudentById(studentId),
@@ -39,16 +138,36 @@ export const studentService = {
   },
 
   async getDashboard(studentId) {
-    const [student, courses, attempts, progress, recommendations, recentActivity, flashcards, documentCount] = await Promise.all([
+    const [student, attempts, progress, recommendations, recentActivity, flashcards, quizzes, documentCount] = await Promise.all([
       userRepository.findStudentById(studentId),
-      courseRepository.findAll(),
       quizAttemptRepository.findByStudent(studentId),
       progressRepository.findByStudent(studentId),
       recommendationRepository.findByStudent(studentId),
       activityRepository.findRecentByStudent(studentId, 8),
       flashcardRepository.findAll(),
+      quizRepository.findAll(),
       documentStudyPackRepository.countByStudent(studentId),
     ]);
+
+    const enrolledCourseIds = getPaidCourseIds(progress);
+    const enrolledCourses = progress.map((item) => item.course).filter(Boolean);
+    const paidCourses = progress.filter((item) => item.paymentStatus === 'paid').map((item) => item.course).filter(Boolean);
+    const enrolledFlashcards = filterByEnrolledCourse(flashcards, enrolledCourseIds, (item) => item?.course?._id || item?.course);
+    const enrolledQuizzes = filterByEnrolledCourse(quizzes, enrolledCourseIds, (item) => item?.course?._id || item?.course);
+
+    const enrolledLessons = progress.filter((item) => item.paymentStatus === 'paid').flatMap((item) => {
+      const course = item.course;
+      const modules = course?.modules || [];
+      return modules.map((module, index) => ({
+        courseId: course?._id,
+        courseTitle: course?.title,
+        lessonIndex: index,
+        title: module.title,
+        type: module.type,
+        durationMinutes: module.durationMinutes || 20,
+        isCompleted: index < (item.completedModules || 0),
+      }));
+    });
 
     const avgQuizScore = attempts.length
       ? Math.round(attempts.reduce((sum, item) => sum + item.percentage, 0) / attempts.length)
@@ -57,19 +176,24 @@ export const studentService = {
     return {
       student,
       stats: {
-        availableCourses: courses.length,
+        enrolledCourses: paidCourses.length,
         completedModules: progress.reduce((sum, item) => sum + item.completedModules, 0),
         avgQuizScore,
         recommendations: recommendations.length,
-        flashcards: flashcards.length,
+        flashcards: enrolledFlashcards.length,
+        quizzes: enrolledQuizzes.length,
+        lessons: enrolledLessons.length,
         documents: documentCount,
       },
-      courses: courses.slice(0, 6),
+      courses: paidCourses.slice(0, 6),
+      quizzes: enrolledQuizzes.slice(0, 8),
+      flashcards: enrolledFlashcards.slice(0, 8),
+      lessons: enrolledLessons.slice(0, 10),
       progress,
       attempts: attempts.slice(0, 5),
       recommendations: recommendations.slice(0, 3),
       recentActivity,
-      topCategories: courses.reduce((acc, course) => {
+      topCategories: paidCourses.reduce((acc, course) => {
         const name = course.category?.name || 'General';
         acc[name] = (acc[name] || 0) + 1;
         return acc;
@@ -92,11 +216,13 @@ export const studentService = {
   },
 
   async getCourseDetail(studentId, courseId) {
-    const [course, quizzes, flashcards, progress] = await Promise.all([
+    const [course, quizzes, flashcards, progress, attempts, enrolledCount] = await Promise.all([
       courseRepository.findById(courseId),
       quizRepository.findByCourse(courseId),
       flashcardRepository.findByCourse(courseId),
       progressRepository.findByStudentAndCourse(studentId, courseId),
+      quizAttemptRepository.findByStudent(studentId),
+      progressRepository.countPaidByCourse(courseId),
     ]);
     if (!course) throw new Error('Course not found');
 
@@ -113,16 +239,97 @@ export const studentService = {
       metadata: { title: course.title },
     });
 
+    const isEnrolled = Boolean(progress);
+    const isPaid = progress?.paymentStatus === 'paid';
+
     return {
       course,
-      quizzes,
-      flashcards,
-      learningContent,
+      lessons: isPaid ? (course.modules || []).map((module, index) => normalizeLesson(course, module, index)) : [],
+      quizzes: isPaid ? quizzes : [],
+      flashcards: isPaid ? flashcards : [],
+      learningContent: isPaid ? learningContent : [],
       progress: progress || {
+        paymentStatus: 'pending',
+        amountPaid: 0,
+        currency: course.currency || 'USD',
+        paidAt: null,
         completedModules: 0,
         totalModules: course.modules?.length || 0,
         completionPercent: 0,
       },
+      access: {
+        isEnrolled,
+        isPaid,
+        requiresPayment: isEnrolled && !isPaid,
+        price: Number(course.price || 0),
+        currency: course.currency || 'USD',
+        enrolledCount,
+      },
+      studyHelper: buildStudyHelper({
+        course,
+        progress,
+        quizzes,
+        attempts,
+      }),
+    };
+  },
+
+  async getLessonDetail(studentId, courseId, lessonIndex) {
+    const [course, quizzes, progress, attempts] = await Promise.all([
+      courseRepository.findById(courseId),
+      quizRepository.findByCourse(courseId),
+      progressRepository.findByStudentAndCourse(studentId, courseId),
+      quizAttemptRepository.findByStudent(studentId),
+    ]);
+
+    if (!course) throw new Error('Course not found');
+    const modules = course.modules || [];
+    if (!modules.length) throw new Error('No lessons are available for this course');
+    if (!Number.isInteger(lessonIndex) || lessonIndex < 0 || lessonIndex >= modules.length) {
+      throw new Error('Lesson not found');
+    }
+
+    if (!progress) throw new Error('Please enroll in the course to access lessons');
+    if (progress.paymentStatus !== 'paid') throw new Error('Payment required. Please complete course payment to access lessons.');
+
+    const lesson = normalizeLesson(course, modules[lessonIndex], lessonIndex);
+    const completedModules = progress?.completedModules || 0;
+
+    await activityRepository.create({
+      student: studentId,
+      activityType: 'lesson_view',
+      resourceType: 'lesson',
+      resourceId: course._id,
+      metadata: {
+        courseTitle: course.title,
+        lessonTitle: lesson.title,
+        lessonIndex,
+      },
+    });
+
+    return {
+      course: {
+        _id: course._id,
+        title: course.title,
+        level: course.level,
+        category: course.category,
+      },
+      lesson,
+      progress: {
+        completedModules,
+        totalModules: modules.length,
+        completionPercent: modules.length ? Math.round((completedModules / modules.length) * 100) : 0,
+      },
+      navigation: {
+        previousLessonIndex: lessonIndex > 0 ? lessonIndex - 1 : null,
+        nextLessonIndex: lessonIndex < modules.length - 1 ? lessonIndex + 1 : null,
+      },
+      studyHelper: buildStudyHelper({
+        course,
+        progress,
+        quizzes,
+        attempts,
+      }),
     };
   },
 
@@ -136,6 +343,13 @@ export const studentService = {
     }
 
     const newProgress = await progressRepository.upsert(studentId, courseId, {
+      paymentStatus: 'pending',
+      amountPaid: 0,
+      currency: course.currency || 'USD',
+      paymentProvider: '',
+      paymentReference: '',
+      paidAt: null,
+      accessGrantedAt: null,
       completedModules: 0,
       totalModules: course.modules?.length || 10,
       completionPercent: 0,
@@ -153,14 +367,299 @@ export const studentService = {
     return newProgress;
   },
 
+  async payForCourse(studentId, courseId, payload = {}) {
+    return studentService.createStripeCourseCheckoutSession(studentId, courseId, payload);
+  },
+
+  async createStripeCourseCheckoutSession(studentId, courseId) {
+    const [course, student, existingProgress] = await Promise.all([
+      courseRepository.findById(courseId),
+      userRepository.findStudentById(studentId),
+      progressRepository.findByStudentAndCourse(studentId, courseId),
+    ]);
+
+    if (!course) throw new Error('Course not found');
+    if (!student) throw new Error('Student not found');
+    if (!existingProgress) throw new Error('Please enroll in the course before making payment');
+
+    if (existingProgress.paymentStatus === 'paid') {
+      return {
+        alreadyPaid: true,
+        access: {
+          isEnrolled: true,
+          isPaid: true,
+          requiresPayment: false,
+          price: Number(course.price || 0),
+          currency: course.currency || 'USD',
+        },
+      };
+    }
+
+    const paymentReference = `COURSE-${courseId}-STUDENT-${studentId}-${Date.now()}`;
+    const unitAmount = Math.round(Number(course.price || 0) * 100);
+    if (unitAmount <= 0) throw new Error('Invalid course price for Stripe checkout');
+
+    const session = await stripeService.createCheckoutSession({
+      mode: 'payment',
+      payment_method_types: ['card'],
+      customer_email: student.email,
+      success_url: `${env.clientUrl}/student/courses/${courseId}?payment=success&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${env.clientUrl}/student/courses/${courseId}?payment=cancel`,
+      line_items: [
+        {
+          price_data: {
+            currency: String(course.currency || 'USD').toLowerCase(),
+            unit_amount: unitAmount,
+            product_data: {
+              name: course.title,
+              description: `Course access for ${course.title}`,
+            },
+          },
+          quantity: 1,
+        },
+      ],
+      metadata: {
+        studentId: String(studentId),
+        courseId: String(courseId),
+        paymentReference,
+      },
+    });
+
+    await progressRepository.upsert(studentId, courseId, {
+      paymentStatus: 'pending',
+      amountPaid: 0,
+      currency: course.currency || 'USD',
+      paymentProvider: 'stripe',
+      paymentReference,
+      paidAt: null,
+      accessGrantedAt: null,
+      lastAccessedAt: new Date(),
+    });
+
+    return {
+      checkoutUrl: session.url,
+      sessionId: session.id,
+      paymentReference,
+      access: {
+        isEnrolled: true,
+        isPaid: false,
+        requiresPayment: true,
+        price: Number(course.price || 0),
+        currency: course.currency || 'USD',
+      },
+    };
+  },
+
+  async confirmStripeCoursePayment(studentId, courseId, sessionId) {
+    if (!sessionId) throw new Error('Checkout session id is required');
+
+    const [course, progress] = await Promise.all([
+      courseRepository.findById(courseId),
+      progressRepository.findByStudentAndCourse(studentId, courseId),
+    ]);
+
+    if (!course) throw new Error('Course not found');
+    if (!progress) throw new Error('Please enroll in the course before confirming payment');
+
+    if (progress.paymentStatus === 'paid') {
+      return {
+        updated: false,
+        reason: 'already_paid',
+        access: {
+          isEnrolled: true,
+          isPaid: true,
+          requiresPayment: false,
+          price: Number(course.price || 0),
+          currency: course.currency || 'USD',
+        },
+      };
+    }
+
+    const session = await stripeService.retrieveCheckoutSession(sessionId);
+    const sessionCourseId = String(session?.metadata?.courseId || '');
+    const sessionStudentId = String(session?.metadata?.studentId || '');
+
+    if (sessionCourseId !== String(courseId) || sessionStudentId !== String(studentId)) {
+      throw new Error('Invalid checkout session for this student or course');
+    }
+
+    if (session.payment_status !== 'paid') {
+      return {
+        updated: false,
+        reason: 'payment_not_completed',
+        access: {
+          isEnrolled: true,
+          isPaid: false,
+          requiresPayment: true,
+          price: Number(course.price || 0),
+          currency: course.currency || 'USD',
+        },
+      };
+    }
+
+    const now = new Date();
+    const amountPaid = Number.isFinite(session.amount_total) ? Number(session.amount_total) / 100 : Number(course.price || 0);
+
+    const updatedProgress = await progressRepository.upsert(studentId, courseId, {
+      paymentStatus: 'paid',
+      amountPaid,
+      currency: String(session.currency || course.currency || 'USD').toUpperCase(),
+      paymentProvider: 'stripe',
+      paymentReference: session.metadata?.paymentReference || progress.paymentReference || `STRIPE-${session.id}`,
+      paidAt: now,
+      accessGrantedAt: now,
+      lastAccessedAt: now,
+    });
+
+    await activityRepository.create({
+      student: studentId,
+      activityType: 'course_payment',
+      resourceType: 'course',
+      resourceId: courseId,
+      metadata: {
+        title: course.title,
+        amountPaid,
+        currency: String(session.currency || course.currency || 'USD').toUpperCase(),
+        provider: 'stripe',
+        sessionId,
+      },
+    });
+
+    return {
+      updated: true,
+      progress: updatedProgress,
+      access: {
+        isEnrolled: true,
+        isPaid: true,
+        requiresPayment: false,
+        price: Number(course.price || 0),
+        currency: course.currency || 'USD',
+      },
+    };
+  },
+
+  async completeLesson(studentId, courseId, lessonIndex, completed = true) {
+    const course = await courseRepository.findById(courseId);
+    if (!course) throw new Error('Course not found');
+
+    const modules = course.modules || [];
+    if (!modules.length) throw new Error('No lessons are available for this course');
+    if (!Number.isInteger(lessonIndex) || lessonIndex < 0 || lessonIndex >= modules.length) {
+      throw new Error('Lesson not found');
+    }
+
+    const existingProgress = await progressRepository.findByStudentAndCourse(studentId, courseId);
+    if (!existingProgress) throw new Error('Please enroll in the course before completing lessons');
+    const currentCompleted = existingProgress?.completedModules || 0;
+    const nextCompleted = completed
+      ? Math.max(currentCompleted, lessonIndex + 1)
+      : Math.min(currentCompleted, lessonIndex);
+    const completionPercent = modules.length ? Math.round((nextCompleted / modules.length) * 100) : 0;
+
+    const updatedProgress = await progressRepository.upsert(studentId, courseId, {
+      completedModules: nextCompleted,
+      totalModules: modules.length,
+      completionPercent,
+      lastAccessedAt: new Date(),
+    });
+
+    await activityRepository.create({
+      student: studentId,
+      activityType: completed ? 'lesson_complete' : 'lesson_reopen',
+      resourceType: 'lesson',
+      resourceId: course._id,
+      metadata: {
+        lessonTitle: modules[lessonIndex].title,
+        lessonIndex,
+        courseTitle: course.title,
+      },
+    });
+
+    return {
+      progress: updatedProgress,
+      nextRecommendedLessonIndex: nextCompleted < modules.length ? nextCompleted : modules.length - 1,
+    };
+  },
+
+  async getSubscription(studentId) {
+    const student = await userRepository.findStudentById(studentId);
+    if (!student) throw new Error('Student not found');
+
+    return {
+      status: student.subscriptionStatus || 'none',
+      plan: student.subscriptionPlan || 'monthly',
+      renewsAt: student.subscriptionRenewsAt,
+      isSubscribed: ['trial', 'active'].includes(student.subscriptionStatus),
+    };
+  },
+
+  async simulateSubscription(studentId, payload) {
+    const status = payload?.status;
+    const plan = payload?.plan || 'monthly';
+    const renewsAt = status === 'canceled'
+      ? null
+      : new Date(Date.now() + (plan === 'yearly' ? 365 : 30) * 24 * 60 * 60 * 1000);
+
+    const updatedStudent = await userRepository.updateById(studentId, {
+      subscriptionStatus: status,
+      subscriptionPlan: plan,
+      subscriptionRenewsAt: renewsAt,
+    });
+
+    await activityRepository.create({
+      student: studentId,
+      activityType: 'subscription_update',
+      resourceType: 'subscription',
+      metadata: {
+        status,
+        plan,
+      },
+    });
+
+    return {
+      status: updatedStudent.subscriptionStatus,
+      plan: updatedStudent.subscriptionPlan,
+      renewsAt: updatedStudent.subscriptionRenewsAt,
+      isSubscribed: ['trial', 'active'].includes(updatedStudent.subscriptionStatus),
+    };
+  },
+
   async listFlashcards(studentId, courseId) {
-    const cards = courseId ? await flashcardRepository.findByCourse(courseId) : await flashcardRepository.findAll();
-    return cards;
+    const progress = await progressRepository.findByStudent(studentId);
+    const enrolledCourseIds = getPaidCourseIds(progress);
+    if (!enrolledCourseIds.size) return [];
+
+    if (courseId && !enrolledCourseIds.has(String(courseId))) return [];
+
+    const cards = courseId
+      ? await flashcardRepository.findByCourse(courseId)
+      : await flashcardRepository.findAll();
+
+    return filterByEnrolledCourse(cards, enrolledCourseIds, (item) => item?.course?._id || item?.course);
+  },
+
+  async listQuizzes(studentId) {
+    const progress = await progressRepository.findByStudent(studentId);
+    const enrolledCourseIds = getPaidCourseIds(progress);
+    if (!enrolledCourseIds.size) return [];
+
+    const quizzes = await quizRepository.findAll();
+    return filterByEnrolledCourse(quizzes, enrolledCourseIds, (item) => item?.course?._id || item?.course);
+  },
+
+  async validateEnrolledResource(studentId, courseId, notEnrolledMessage) {
+    const progress = await progressRepository.findByStudentAndCourse(studentId, courseId);
+    if (!progress) throw new Error(notEnrolledMessage);
+    if (progress.paymentStatus !== 'paid') throw new Error('Payment required. Please complete course payment to access this content.');
+    return true;
   },
 
   async trackFlashcardReview(studentId, flashcardId) {
     const card = await flashcardRepository.findById(flashcardId);
     if (!card) throw new Error('Flashcard not found');
+
+    await studentService.validateEnrolledResource(studentId, card.course?._id || card.course, 'Please enroll in this course to review its flashcards');
+
     await activityRepository.create({
       student: studentId,
       activityType: 'flashcard_review',
@@ -169,6 +668,48 @@ export const studentService = {
       metadata: { question: card.question, courseTitle: card.course?.title },
     });
     return { tracked: true };
+  },
+
+  async submitQuiz(studentId, quizId, answers) {
+    const quiz = await quizRepository.findById(quizId);
+    if (!quiz) throw new Error('Quiz not found');
+
+    await studentService.validateEnrolledResource(studentId, quiz.course?._id || quiz.course, 'Please enroll in this course to attempt its quizzes');
+
+    let score = 0;
+    quiz.questions.forEach((q, index) => {
+      if (answers[index] === q.correctAnswer) score += 1;
+    });
+
+    const totalQuestions = quiz.questions.length;
+    const percentage = totalQuestions ? Math.round((score / totalQuestions) * 100) : 0;
+
+    const attempt = await quizAttemptRepository.create({
+      student: studentId,
+      quiz: quizId,
+      answers,
+      score,
+      totalQuestions,
+      percentage,
+    });
+
+    const totalModules = quiz.course?.modules?.length || 10;
+    await progressRepository.upsert(studentId, quiz.course._id, {
+      completedModules: Math.min(totalModules, Math.max(1, Math.round((percentage / 100) * totalModules))),
+      totalModules,
+      completionPercent: Math.min(100, percentage),
+      lastAccessedAt: new Date(),
+    });
+
+    await activityRepository.create({
+      student: studentId,
+      activityType: 'quiz_submit',
+      resourceType: 'quiz',
+      resourceId: quizId,
+      metadata: { percentage, title: quiz.title },
+    });
+
+    return attempt;
   },
 
   async analyzePdfDocument(studentId, file) {
@@ -357,49 +898,8 @@ export const studentService = {
     };
   },
 
-  listQuizzes: async () => quizRepository.findAll(),
   listAttempts: async (studentId) => quizAttemptRepository.findByStudent(studentId),
   listRecommendations: async (studentId) => recommendationRepository.findByStudent(studentId),
-
-  async submitQuiz(studentId, quizId, answers) {
-    const quiz = await quizRepository.findById(quizId);
-    if (!quiz) throw new Error('Quiz not found');
-
-    let score = 0;
-    quiz.questions.forEach((q, index) => {
-      if (answers[index] === q.correctAnswer) score += 1;
-    });
-
-    const totalQuestions = quiz.questions.length;
-    const percentage = totalQuestions ? Math.round((score / totalQuestions) * 100) : 0;
-
-    const attempt = await quizAttemptRepository.create({
-      student: studentId,
-      quiz: quizId,
-      answers,
-      score,
-      totalQuestions,
-      percentage,
-    });
-
-    const totalModules = quiz.course?.modules?.length || 10;
-    await progressRepository.upsert(studentId, quiz.course._id, {
-      completedModules: Math.min(totalModules, Math.max(1, Math.round((percentage / 100) * totalModules))),
-      totalModules,
-      completionPercent: Math.min(100, percentage),
-      lastAccessedAt: new Date(),
-    });
-
-    await activityRepository.create({
-      student: studentId,
-      activityType: 'quiz_submit',
-      resourceType: 'quiz',
-      resourceId: quizId,
-      metadata: { percentage, title: quiz.title },
-    });
-
-    return attempt;
-  },
 
   async refreshRecommendations(studentId) {
     const student = await userRepository.findStudentById(studentId);
@@ -432,5 +932,80 @@ export const studentService = {
     if (filter.contentType) query.contentType = filter.contentType;
     if (filter.category) query.category = filter.category;
     return instructorContentRepository.findAllPublished(query);
+  },
+
+  async generateStructuredContent(studentId, payload) {
+    const { courseName, topic, skillLevel } = payload;
+    if (!courseName?.trim() || !topic?.trim()) {
+      throw new Error('Course name and learning topic are required');
+    }
+
+    const student = await userRepository.findStudentById(studentId);
+    if (!student) throw new Error('Student not found');
+
+    const skillLevelMap = {
+      Beginner: 'beginner with no prior knowledge',
+      Intermediate: 'intermediate learner with some foundational knowledge',
+      Advanced: 'advanced learner seeking deep understanding and nuances',
+    };
+
+    const skillDescription = skillLevelMap[skillLevel] || skillLevelMap.Beginner;
+
+    const prompt = `You are an expert educational content creator. Generate comprehensive, structured learning content for a ${skillDescription} about the following:
+
+Course: ${courseName}
+Topic: ${topic}
+
+Please provide the response in the following JSON format (ensure valid JSON):
+{
+  "overview": "A 2-3 sentence overview of the topic tailored to the ${skillLevel} level",
+  "keyConcepts": ["concept 1", "concept 2", "concept 3", "concept 4", "concept 5"],
+  "learningApproach": "A paragraph describing the best approach for a ${skillLevel} learner to understand this topic, including specific study strategies and time recommendations",
+  "practiceExercises": ["exercise 1", "exercise 2", "exercise 3", "exercise 4"],
+  "misconceptions": ["common misconception 1 and correction", "common misconception 2 and correction", "common misconception 3 and correction"],
+  "assessmentQuestions": ["question 1", "question 2", "question 3", "question 4", "question 5"],
+  "furtherResources": ["resource 1 and why it matters", "resource 2 and why it matters", "resource 3 and why it matters"]
+}
+
+Ensure the content is:
+- Appropriate for the ${skillLevel} skill level
+- Practical and actionable
+- Tailored specifically to: ${topic} in ${courseName}
+- Free of jargon that the learner wouldn't understand at their level`;
+
+    let content;
+    try {
+      const aiResponse = await aiDocumentService.callOpenAI(prompt);
+      const jsonMatch = aiResponse.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) throw new Error('Invalid response format from AI');
+      content = JSON.parse(jsonMatch[0]);
+    } catch (err) {
+      throw new Error(`Failed to generate content: ${err.message}`);
+    }
+
+    await activityRepository.create({
+      student: studentId,
+      activityType: 'generated_content',
+      resourceType: 'learning_content',
+      metadata: {
+        courseName: courseName.trim(),
+        topic: topic.trim(),
+        skillLevel,
+      },
+    });
+
+    return {
+      courseName: courseName.trim(),
+      topic: topic.trim(),
+      skillLevel,
+      overview: content.overview || '',
+      keyConcepts: Array.isArray(content.keyConcepts) ? content.keyConcepts : [],
+      learningApproach: content.learningApproach || '',
+      practiceExercises: Array.isArray(content.practiceExercises) ? content.practiceExercises : [],
+      misconceptions: Array.isArray(content.misconceptions) ? content.misconceptions : [],
+      assessmentQuestions: Array.isArray(content.assessmentQuestions) ? content.assessmentQuestions : [],
+      furtherResources: Array.isArray(content.furtherResources) ? content.furtherResources : [],
+      generatedAt: new Date(),
+    };
   },
 };

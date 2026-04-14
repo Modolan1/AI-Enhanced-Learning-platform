@@ -14,12 +14,15 @@ import InstructorsPage from '../pages/admin/InstructorsPage';
 import StudentDashboardPage from '../pages/student/StudentDashboardPage';
 import CoursesPage from '../pages/student/CoursesPage';
 import CourseDetailPage from '../pages/student/CourseDetailPage';
+import MyCourseOverviewPage from '../pages/student/MyCourseOverviewPage';
+import LessonPage from '../pages/student/LessonPage';
 import FlashcardsPage from '../pages/student/FlashcardsPage';
 import QuizzesPage from '../pages/student/QuizzesPage';
 import ProfilePage from '../pages/student/ProfilePage';
 import DocumentsPage from '../pages/student/DocumentsPage';
 import VideosPage from '../pages/student/VideosPage';
 import UpdatesPage from '../pages/student/UpdatesPage';
+import StudyHelperPage from '../pages/student/StudyHelperPage';
 import InstructorDashboardPage from '../pages/instructor/InstructorDashboardPage';
 import InstructorProfilePage from '../pages/instructor/InstructorProfilePage';
 import ManageContentPage from '../pages/instructor/ManageContentPage';
@@ -64,11 +67,14 @@ export default function AppRouter() {
       <Route path="/student/dashboard" element={<ProtectedRoute roles={['student']}><StudentDashboardPage /></ProtectedRoute>} />
       <Route path="/student/courses" element={<ProtectedRoute roles={['student']}><CoursesPage /></ProtectedRoute>} />
       <Route path="/student/courses/:id" element={<ProtectedRoute roles={['student']}><CourseDetailPage /></ProtectedRoute>} />
+      <Route path="/student/courses/:id/learn" element={<ProtectedRoute roles={['student']}><MyCourseOverviewPage /></ProtectedRoute>} />
+      <Route path="/student/courses/:id/lessons/:lessonIndex" element={<ProtectedRoute roles={['student']}><LessonPage /></ProtectedRoute>} />
       <Route path="/student/flashcards" element={<ProtectedRoute roles={['student']}><FlashcardsPage /></ProtectedRoute>} />
       <Route path="/student/quizzes" element={<ProtectedRoute roles={['student']}><QuizzesPage /></ProtectedRoute>} />
       <Route path="/student/documents" element={<ProtectedRoute roles={['student']}><DocumentsPage /></ProtectedRoute>} />
       <Route path="/student/videos" element={<ProtectedRoute roles={['student']}><VideosPage /></ProtectedRoute>} />
       <Route path="/student/updates" element={<ProtectedRoute roles={['student']}><UpdatesPage /></ProtectedRoute>} />
+      <Route path="/student/study-helper" element={<ProtectedRoute roles={['student']}><StudyHelperPage /></ProtectedRoute>} />
       <Route path="/student/profile" element={<ProtectedRoute roles={['student']}><ProfilePage /></ProtectedRoute>} />
 
       <Route path="/instructor/dashboard" element={<ProtectedRoute roles={['instructor']}><InstructorDashboardPage /></ProtectedRoute>} />

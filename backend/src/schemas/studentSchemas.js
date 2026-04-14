@@ -1,6 +1,8 @@
 import { z } from 'zod';
 
 const SKILL_LEVELS = ['Beginner', 'Intermediate', 'Advanced'];
+const SUBSCRIPTION_STATUSES = ['trial', 'active', 'canceled'];
+const SUBSCRIPTION_PLANS = ['monthly', 'yearly'];
 
 // ── Profile ───────────────────────────────────────────────────────────────────
 export const updateProfileSchema = z.object({
@@ -16,7 +18,7 @@ export const updateProfileSchema = z.object({
 
 // ── Quiz submission ──────────────────────────────────────────────────────────
 export const submitQuizSchema = z.object({
-  answers: z.array(z.number().int().min(0)).min(1, 'At least one answer is required'),
+  answers: z.array(z.union([z.string().trim(), z.number().int().min(0)])).min(1, 'At least one answer is required'),
 });
 
 // ── Document chat ─────────────────────────────────────────────────────────────
@@ -26,5 +28,23 @@ export const askQuestionSchema = z.object({
 
 // ── Document quiz submission ──────────────────────────────────────────────────
 export const submitDocumentQuizSchema = z.object({
-  answers: z.array(z.number().int().min(0)).min(1, 'At least one answer is required'),
+  answers: z.array(z.union([z.string().trim(), z.number().int().min(0)])).min(1, 'At least one answer is required'),
+});
+
+export const completeLessonSchema = z.object({
+  completed: z.boolean().default(true),
+});
+
+export const simulateSubscriptionSchema = z.object({
+  status: z.enum(SUBSCRIPTION_STATUSES),
+  plan: z.enum(SUBSCRIPTION_PLANS).optional(),
+});
+
+export const payForCourseSchema = z.object({
+  provider: z.string().trim().min(2).max(50).optional(),
+  paymentReference: z.string().trim().min(3).max(120).optional(),
+});
+
+export const confirmCoursePaymentSchema = z.object({
+  sessionId: z.string().trim().min(6, 'Checkout session id is required'),
 });

@@ -4,6 +4,7 @@ const navItems = [
   { path: '/student/documents', label: 'Documents' },
   { path: '/student/videos', label: 'Videos' },
   { path: '/student/courses', label: 'Courses' },
+  { path: '/student/study-helper', label: 'Study Smart' },
   { path: '/student/flashcards', label: 'Flashcards' },
   { path: '/student/quizzes', label: 'Quizzes' },
   { path: '/student/updates', label: 'Updates' },

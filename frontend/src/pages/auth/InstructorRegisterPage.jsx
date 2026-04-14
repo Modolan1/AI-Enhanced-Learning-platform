@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useMemo, useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { authService } from '../../services/authService';
 import Input from '../../components/common/Input';
 import Button from '../../components/common/Button';
@@ -20,17 +20,24 @@ function getPasswordChecks(password) {
 
 export default function InstructorRegisterPage() {
   const navigate = useNavigate();
-  const [form, setForm] = useState({
+  const location = useLocation();
+  const onboarding = location.state?.instructorOnboarding || {};
+
+  const initialForm = useMemo(() => ({
     firstName: '',
     lastName: '',
     email: '',
     password: '',
     role: 'instructor',
-    skillLevel: 'Advanced',
-    preferredSubject: '',
-    preferredLearningStyle: 'Project-based',
-    learningGoal: 'Teach students and contribute instructor content',
-    weeklyLearningGoalHours: 5,
+    skillLevel: onboarding.skillLevel || 'Advanced',
+    preferredSubject: onboarding.preferredSubject || '',
+    preferredLearningStyle: onboarding.preferredLearningStyle || 'Project-based',
+    learningGoal: onboarding.learningGoal || 'Teach students and contribute instructor content',
+    weeklyLearningGoalHours: Number(onboarding.weeklyLearningGoalHours || 5),
+  }), [onboarding.learningGoal, onboarding.preferredLearningStyle, onboarding.preferredSubject, onboarding.skillLevel, onboarding.weeklyLearningGoalHours]);
+
+  const [form, setForm] = useState({
+    ...initialForm,
   });
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');

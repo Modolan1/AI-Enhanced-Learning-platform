@@ -134,6 +134,44 @@ function sanitizeStudyPack(payload, fallback, fileName) {
 }
 
 export const aiDocumentService = {
+  async callOpenAI(prompt) {
+    if (!client) {
+      return JSON.stringify({
+        overview: 'Content generation is not available. Please check your API configuration.',
+        keyConcepts: [],
+        learningApproach: 'Please configure an API key for content generation.',
+        practiceExercises: [],
+        misconceptions: [],
+        assessmentQuestions: [],
+        furtherResources: [],
+      });
+    }
+
+    try {
+      const response = await client.responses.create({
+        model: env.openaiModel,
+        input: prompt,
+      });
+
+      const text = (response.output_text || '').trim();
+      if (!text) {
+        throw new Error('Empty response from OpenAI');
+      }
+      return text;
+    } catch (error) {
+      console.warn('OpenAI API error:', error.message);
+      return JSON.stringify({
+        overview: 'Unable to generate content at this time. Please try again later.',
+        keyConcepts: [],
+        learningApproach: 'Please try again in a few moments.',
+        practiceExercises: [],
+        misconceptions: [],
+        assessmentQuestions: [],
+        furtherResources: [],
+      });
+    }
+  },
+
   async generateStudyPack(rawText, fileName) {
     const normalizedText = normalizeText(rawText).slice(0, MAX_TEXT_CHARS);
     const fallback = buildFallbackStudyPack(normalizedText, fileName);

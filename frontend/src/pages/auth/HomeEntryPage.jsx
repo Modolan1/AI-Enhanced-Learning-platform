@@ -52,6 +52,29 @@ const onboardingSteps = [
   },
 ];
 
+const instructorOnboardingSteps = [
+  {
+    key: 'preferredSubject',
+    title: 'Which course area do you want to teach?',
+    options: ['Web Development', 'Data Science', 'Math', 'Programming Fundamentals'],
+  },
+  {
+    key: 'skillLevel',
+    title: 'What is your teaching experience level?',
+    options: ['Beginner', 'Intermediate', 'Advanced'],
+  },
+  {
+    key: 'preferredLearningStyle',
+    title: 'How do you usually teach best?',
+    options: ['Visual', 'Practice-based', 'Reading-first', 'Project-based'],
+  },
+  {
+    key: 'weeklyLearningGoalHours',
+    title: 'How many hours weekly can you dedicate to students?',
+    options: ['3', '5', '8', '12'],
+  },
+];
+
 function getPasswordChecks(password) {
   return [
     { label: `At least ${PASSWORD_MIN} characters`, met: password.length >= PASSWORD_MIN },
@@ -102,6 +125,7 @@ export default function HomeEntryPage() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const [showLogin, setShowLogin] = useState(false);
+  const [showInstructorQuestionnaire, setShowInstructorQuestionnaire] = useState(false);
   const [showQuestionnaire, setShowQuestionnaire] = useState(false);
   const [showRegister, setShowRegister] = useState(false);
   const [showCourseEnrollment, setShowCourseEnrollment] = useState(false);
@@ -116,6 +140,13 @@ export default function HomeEntryPage() {
   const [stepIndex, setStepIndex] = useState(0);
   const [onboardingAnswers, setOnboardingAnswers] = useState({
     learningGoal: '',
+    preferredSubject: '',
+    skillLevel: '',
+    preferredLearningStyle: '',
+    weeklyLearningGoalHours: '',
+  });
+  const [instructorStepIndex, setInstructorStepIndex] = useState(0);
+  const [instructorOnboardingAnswers, setInstructorOnboardingAnswers] = useState({
     preferredSubject: '',
     skillLevel: '',
     preferredLearningStyle: '',
@@ -193,6 +224,9 @@ export default function HomeEntryPage() {
   const currentStep = onboardingSteps[stepIndex];
   const currentValue = onboardingAnswers[currentStep?.key] || '';
   const questionProgress = Math.round(((stepIndex + 1) / onboardingSteps.length) * 100);
+  const currentInstructorStep = instructorOnboardingSteps[instructorStepIndex];
+  const currentInstructorValue = instructorOnboardingAnswers[currentInstructorStep?.key] || '';
+  const instructorQuestionProgress = Math.round(((instructorStepIndex + 1) / instructorOnboardingSteps.length) * 100);
 
   const openQuestionnaire = () => {
     setStepIndex(0);
@@ -204,6 +238,17 @@ export default function HomeEntryPage() {
       weeklyLearningGoalHours: '',
     });
     setShowQuestionnaire(true);
+  };
+
+  const openInstructorQuestionnaire = () => {
+    setInstructorStepIndex(0);
+    setInstructorOnboardingAnswers({
+      preferredSubject: '',
+      skillLevel: '',
+      preferredLearningStyle: '',
+      weeklyLearningGoalHours: '',
+    });
+    setShowInstructorQuestionnaire(true);
   };
 
   const handleSectionNav = (id) => {
@@ -236,6 +281,25 @@ export default function HomeEntryPage() {
   const completeCourseQuestionnaire = () => {
     setShowCourseEnrollment(false);
     setShowRegister(true);
+  };
+
+  const completeInstructorQuestionnaire = () => {
+    const weeklyHours = Number(instructorOnboardingAnswers.weeklyLearningGoalHours || 5);
+    const preferredSubject = instructorOnboardingAnswers.preferredSubject || '';
+    const skillLevel = instructorOnboardingAnswers.skillLevel || 'Advanced';
+
+    setShowInstructorQuestionnaire(false);
+    navigate('/instructor/register', {
+      state: {
+        instructorOnboarding: {
+          preferredSubject,
+          skillLevel,
+          preferredLearningStyle: instructorOnboardingAnswers.preferredLearningStyle || 'Project-based',
+          weeklyLearningGoalHours: weeklyHours,
+          learningGoal: `Teach ${preferredSubject || 'students'} with ${skillLevel.toLowerCase()} instructor expertise`,
+        },
+      },
+    });
   };
 
   const handleLogin = async (event) => {
@@ -307,8 +371,7 @@ export default function HomeEntryPage() {
             <button type="button" onClick={() => handleSectionNav('courses')} className={`transition hover:text-indigo-700 ${activeSection === 'courses' ? 'text-indigo-700' : ''}`}>Enroll for Courses</button>
             <button type="button" onClick={() => handleSectionNav('about')} className={`transition hover:text-indigo-700 ${activeSection === 'about' ? 'text-indigo-700' : ''}`}>About</button>
             <button type="button" onClick={() => handleSectionNav('contact')} className={`transition hover:text-indigo-700 ${activeSection === 'contact' ? 'text-indigo-700' : ''}`}>Contact</button>
-            <Link to="/instructor/register" className="transition hover:text-indigo-700">Join as Instructor</Link>
-            <Link to="/instructor/login" className="transition hover:text-indigo-700">Instructor Login</Link>
+            <button type="button" onClick={openInstructorQuestionnaire} className="transition hover:text-indigo-700">Join as Instructor</button>
             <button type="button" onClick={() => setShowLogin(true)} className="hover:text-indigo-700">Login</button>
             <Button onClick={openQuestionnaire}>Get Started</Button>
           </nav>
@@ -329,8 +392,16 @@ export default function HomeEntryPage() {
               <button type="button" onClick={() => handleSectionNav('courses')} className={`rounded-lg px-3 py-2 text-left ${activeSection === 'courses' ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-slate-50'}`}>Enroll for Courses</button>
               <button type="button" onClick={() => handleSectionNav('about')} className={`rounded-lg px-3 py-2 text-left ${activeSection === 'about' ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-slate-50'}`}>About</button>
               <button type="button" onClick={() => handleSectionNav('contact')} className={`rounded-lg px-3 py-2 text-left ${activeSection === 'contact' ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-slate-50'}`}>Contact</button>
-              <Link to="/instructor/register" className="rounded-lg px-3 py-2 text-left hover:bg-slate-50" onClick={() => setMobileMenuOpen(false)}>Join as Instructor</Link>
-              <Link to="/instructor/login" className="rounded-lg px-3 py-2 text-left hover:bg-slate-50" onClick={() => setMobileMenuOpen(false)}>Instructor Login</Link>
+              <button
+                type="button"
+                onClick={() => {
+                  openInstructorQuestionnaire();
+                  setMobileMenuOpen(false);
+                }}
+                className="rounded-lg px-3 py-2 text-left hover:bg-slate-50"
+              >
+                Join as Instructor
+              </button>
               <button
                 type="button"
                 onClick={() => {
@@ -456,6 +527,50 @@ export default function HomeEntryPage() {
             {loginError && <div className="rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{loginError}</div>}
             <Button type="submit" className="w-full">Sign In</Button>
           </form>
+        </Modal>
+      )}
+
+      {showInstructorQuestionnaire && (
+        <Modal title="Instructor Onboarding" onClose={() => setShowInstructorQuestionnaire(false)}>
+          <div className="mb-4">
+            <div className="mb-2 flex items-center justify-between text-xs text-slate-500">
+              <span>Step {instructorStepIndex + 1} of {instructorOnboardingSteps.length}</span>
+              <span>{instructorQuestionProgress}%</span>
+            </div>
+            <div className="h-2 rounded-full bg-slate-100">
+              <div className="h-2 rounded-full bg-indigo-600" style={{ width: `${instructorQuestionProgress}%` }} />
+            </div>
+          </div>
+
+          <h4 className="text-lg font-semibold text-slate-900">{currentInstructorStep.title}</h4>
+          <div className="mt-4 grid gap-2 sm:grid-cols-2">
+            {currentInstructorStep.options.map((option) => (
+              <button
+                type="button"
+                key={option}
+                onClick={() => setInstructorOnboardingAnswers((prev) => ({ ...prev, [currentInstructorStep.key]: option }))}
+                className={`rounded-xl border px-4 py-3 text-left text-sm transition ${currentInstructorValue === option ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'}`}
+              >
+                {option}
+              </button>
+            ))}
+          </div>
+
+          <div className="mt-6 flex gap-2">
+            <Button variant="secondary" onClick={() => setInstructorStepIndex((prev) => Math.max(0, prev - 1))} disabled={instructorStepIndex === 0}>Previous</Button>
+            {instructorStepIndex < instructorOnboardingSteps.length - 1 ? (
+              <Button onClick={() => setInstructorStepIndex((prev) => Math.min(instructorOnboardingSteps.length - 1, prev + 1))} disabled={!currentInstructorValue}>Next</Button>
+            ) : (
+              <Button onClick={completeInstructorQuestionnaire} disabled={!currentInstructorValue}>Continue to Instructor Registration</Button>
+            )}
+          </div>
+
+          <p className="mt-4 text-center text-xs text-slate-500">
+            Already have an instructor account?{' '}
+            <Link to="/instructor/login" className="font-medium text-indigo-600" onClick={() => setShowInstructorQuestionnaire(false)}>
+              Instructor Login
+            </Link>
+          </p>
         </Modal>
       )}
 
