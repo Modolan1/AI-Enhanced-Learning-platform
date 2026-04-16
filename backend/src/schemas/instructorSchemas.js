@@ -33,3 +33,33 @@ export const uploadCourseModuleAssetSchema = z.object({
   assetType: z.enum(['video', 'resource']),
   resourceTitle: z.string().trim().max(180).optional().default(''),
 });
+
+const courseLevels = ['Beginner', 'Intermediate', 'Advanced'];
+
+const announcementSchema = z.object({
+  title: z.string().trim().min(1).max(180),
+  message: z.string().trim().min(1).max(2000),
+  createdAt: z.coerce.date().optional(),
+});
+
+const moduleSchema = z.object({
+  title: z.string().trim().min(1).max(220),
+  durationMinutes: z.coerce.number().int().min(1).max(2000),
+  type: z.enum(['video', 'reading', 'exercise', 'project']),
+  textContent: z.string().trim().max(50000).optional().default(''),
+  videoUrl: z.string().trim().max(1000).optional().default(''),
+  resourceUrl: z.string().trim().max(1000).optional().default(''),
+  resourceTitle: z.string().trim().max(200).optional().default(''),
+});
+
+export const updateOwnCourseSchema = z.object({
+  title: z.string().trim().min(1).max(200).optional(),
+  description: z.string().trim().min(1).max(2000).optional(),
+  category: z.string().regex(/^[a-f\d]{24}$/i, 'Invalid category ID').optional(),
+  level: z.enum(courseLevels).optional(),
+  durationHours: z.coerce.number().min(0).max(10000).optional(),
+  thumbnail: z.string().trim().max(1000).optional(),
+  overviewNotes: z.string().trim().max(5000).optional(),
+  announcements: z.array(announcementSchema).optional(),
+  modules: z.array(moduleSchema).optional(),
+}).strict();

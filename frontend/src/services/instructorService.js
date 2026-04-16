@@ -7,6 +7,14 @@ export const instructorService = {
   getContent: async () => (await API.get('/instructor/content')).data,
   getCategories: async () => (await API.get('/instructor/categories')).data,
   getMyCourses: async () => (await API.get('/instructor/my-courses')).data,
+  updateCourse: async (id, payload) => (await API.put(`/instructor/courses/${id}`, payload)).data,
+  uploadCourseThumbnail: async (file) => {
+    const formData = new FormData();
+    formData.append('thumbnail', file);
+    return (await API.post('/instructor/courses/upload/thumbnail', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })).data;
+  },
   getStudentsEnrolled: async () => (await API.get('/instructor/students-enrolled')).data,
   createContent: async (formData) => (await API.post('/instructor/content', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },

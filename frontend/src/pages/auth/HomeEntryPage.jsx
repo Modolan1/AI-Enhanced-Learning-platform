@@ -5,6 +5,7 @@ import Input from '../../components/common/Input';
 import Button from '../../components/common/Button';
 import { useAuth } from '../../hooks/useAuth';
 import { authService } from '../../services/authService';
+import heroStudentOnline from '../../assets/hero-student-online.svg';
 
 const apiOrigin = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/api\/?$/, '');
 
@@ -365,7 +366,7 @@ export default function HomeEntryPage() {
             <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-teal-400 to-cyan-400 text-slate-900 shadow-sm">
               <BrainCircuit size={18} />
             </span>
-            <span>LearnWithAI</span>
+            <span>EduSmartHub</span>
           </button>
           <nav className="hidden items-center gap-6 text-sm font-medium text-slate-600 md:flex">
             <button type="button" onClick={() => handleSectionNav('courses')} className={`transition hover:text-indigo-700 ${activeSection === 'courses' ? 'text-indigo-700' : ''}`}>Enroll for Courses</button>
@@ -427,25 +428,29 @@ export default function HomeEntryPage() {
       </header>
 
       <main id="home" className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-14">
-        <section className="grid gap-8 lg:grid-cols-2 lg:items-center">
-          <div>
+        <section className="relative isolate overflow-hidden rounded-3xl px-4 py-6 sm:px-6 sm:py-8 lg:grid lg:grid-cols-2 lg:items-center lg:gap-8">
+          <img
+            src={heroStudentOnline}
+            alt=""
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-y-0 right-[-18%] z-0 hidden h-full max-h-[620px] w-auto opacity-55 md:block"
+          />
+          <div className="relative z-10">
             <div className="inline-block rounded-full bg-indigo-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-indigo-700">
-              AI Personal Learning Platform
+              Smart Learning Platform
             </div>
             <h1 className="mt-4 text-4xl font-black leading-tight tracking-tight sm:text-5xl">
-              One smart start.
-              <br />
-              Personalized learning that adapts to you.
+              Learn Smarter, Progress Faster.
             </h1>
             <p className="mt-4 max-w-xl text-base text-slate-600">
-              Answer a short set of onboarding questions, get AI-powered recommendations like modern learning platforms, and start with a dashboard tailored to your goals.
+              An AI-enhanced learning platform with courses, quizzes, dashboards, and smart study guidance tailored to every learner.
             </p>
             <div className="mt-7 flex flex-wrap gap-3">
               <Button onClick={openQuestionnaire}>Get Started</Button>
               <Button variant="secondary" onClick={() => setShowLogin(true)}>Login</Button>
             </div>
           </div>
-          <div className="rounded-3xl border border-white/80 bg-white/90 p-6 shadow-xl shadow-indigo-100">
+          <div className="relative z-10 rounded-3xl border border-white/70 bg-white/75 p-6 shadow-xl shadow-indigo-100 backdrop-blur-sm">
             <h2 className="text-lg font-semibold">How it works</h2>
             <ol className="mt-4 space-y-3 text-sm text-slate-700">
               <li>1. Complete a quick onboarding question series.</li>
@@ -487,7 +492,14 @@ export default function HomeEntryPage() {
                     <div className="mt-4 flex items-center justify-between">
                       <span className="text-xs text-slate-500">{course.level} • {course.durationHours}h</span>
                       <div className="flex items-center gap-1">
-                        <span className="text-sm font-semibold text-amber-500">★ 4.5</span>
+                        {Number(course.rating || 0) > 0 ? (
+                          <>
+                            <span className="text-sm font-semibold text-amber-500">★ {Number(course.rating || 0).toFixed(1)}</span>
+                            <span className="text-xs text-slate-400">({course.reviewCount || 0})</span>
+                          </>
+                        ) : (
+                          <span className="text-xs italic text-slate-400">No ratings yet</span>
+                        )}
                       </div>
                     </div>
                     <Button className="mt-4 w-full">Enroll Now</Button>
@@ -498,10 +510,19 @@ export default function HomeEntryPage() {
           </div>
         </section>
 
-        <section id="about" className="mt-20 grid gap-6 md:grid-cols-3">
+        <section id="about" className="mt-20">
+          <div className="mb-8 text-center">
+            <p className="text-sm font-semibold uppercase tracking-widest text-indigo-600">About the Platform</p>
+            <h2 className="mt-2 text-3xl font-extrabold text-slate-900">Built for modern learners</h2>
+            <p className="mx-auto mt-3 max-w-2xl text-base text-slate-500">Everything you need to learn, grow, and succeed — powered by AI and designed for simplicity.</p>
+          </div>
+          <div className="grid gap-6 md:grid-cols-3">
           <div className="rounded-2xl border border-slate-200 bg-white p-5">
-            <h3 className="font-semibold">Adaptive Learning Paths</h3>
-            <p className="mt-2 text-sm text-slate-600">AI continuously aligns topics and learning style to your progress.</p>
+            <h3 className="font-semibold"> A smarter way to learn, practice, and grow</h3>
+            <p className="mt-2 text-sm text-slate-600">This AI-based learning platform is designed to make online education
+              more engaging, personalized, and easy to manage. Students can enroll
+              in courses, access lesson materials, complete quizzes, and receive
+              intelligent study guidance along the way.</p>
           </div>
           <div className="rounded-2xl border border-slate-200 bg-white p-5">
             <h3 className="font-semibold">Document Intelligence</h3>
@@ -509,15 +530,97 @@ export default function HomeEntryPage() {
           </div>
           <div className="rounded-2xl border border-slate-200 bg-white p-5">
             <h3 className="font-semibold">Actionable Progress</h3>
-            <p className="mt-2 text-sm text-slate-600">Track scores, strengths, weak areas, and recommendations in one dashboard.</p>
+            <p className="mt-2 text-sm text-slate-600"> With dedicated student dashboards, the platform supports
+              both effective learning and simple course management in one modern system.</p>
+          </div>
           </div>
         </section>
 
-        <section id="contact" className="mt-20 rounded-3xl border border-slate-200 bg-white p-8">
-          <h2 className="text-2xl font-bold">Contact</h2>
-          <p className="mt-2 text-sm text-slate-600">Questions or support request? Reach us at support@learnai.local</p>
-        </section>
       </main>
+
+      {/* ── Modern Footer ── */}
+      <footer id="contact" className="mt-20 bg-slate-900 text-slate-300">
+        <div className="mx-auto max-w-6xl px-4 py-14 sm:px-6">
+          <div className="grid gap-10 md:grid-cols-3">
+
+            {/* Column 1 – Brand */}
+            <div>
+              <div className="mb-4 inline-flex items-center gap-2 text-xl font-bold text-white">
+                <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-teal-400 to-cyan-400 text-slate-900 shadow-sm">
+                  <BrainCircuit size={18} />
+                </span>
+                EduSmartHub
+              </div>
+              <p className="text-sm leading-relaxed text-slate-400">
+                An AI-powered learning platform designed to help students learn faster, practice smarter, and track real progress — all in one place.
+              </p>
+              <div className="mt-5 flex gap-3">
+                <a href="mailto:support@learnai.local" className="rounded-lg bg-slate-800 px-3 py-2 text-xs font-medium text-slate-300 hover:bg-slate-700 hover:text-white transition">support@learnai.local</a>
+              </div>
+            </div>
+
+            {/* Column 2 – Quick Links */}
+            <div>
+              <h4 className="mb-4 text-sm font-semibold uppercase tracking-widest text-slate-400">Quick Links</h4>
+              <ul className="space-y-2.5 text-sm">
+                {[
+                  { label: 'Home', id: 'home' },
+                  { label: 'Enroll for Courses', id: 'courses' },
+                  { label: 'About the Platform', id: 'about' },
+                  { label: 'Contact', id: 'contact' },
+                ].map(({ label, id }) => (
+                  <li key={id}>
+                    <button
+                      type="button"
+                      onClick={() => handleSectionNav(id)}
+                      className="flex items-center gap-1.5 text-slate-400 transition hover:text-white"
+                    >
+                      <svg className="h-3.5 w-3.5 shrink-0 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                      {label}
+                    </button>
+                  </li>
+                ))}
+                <li>
+                  <button type="button" onClick={openInstructorQuestionnaire} className="flex items-center gap-1.5 text-slate-400 transition hover:text-white">
+                    <svg className="h-3.5 w-3.5 shrink-0 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                    Join as Instructor
+                  </button>
+                </li>
+              </ul>
+            </div>
+
+            {/* Column 3 – Contact & Get Started */}
+            <div>
+              <h4 className="mb-4 text-sm font-semibold uppercase tracking-widest text-slate-400">Get in Touch</h4>
+              <p className="text-sm text-slate-400">Have questions or need support? We're here to help.</p>
+              <a
+                href="mailto:support@learnai.local"
+                className="mt-3 inline-block text-sm text-indigo-400 hover:text-indigo-300 transition"
+              >
+                support@learnai.local
+              </a>
+              <div className="mt-6">
+                <button
+                  type="button"
+                  onClick={openQuestionnaire}
+                  className="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-900/40 transition hover:bg-indigo-500"
+                >
+                  Get Started Free
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-12 border-t border-slate-800 pt-6 flex flex-col items-center justify-between gap-3 text-xs text-slate-500 sm:flex-row">
+            <span>© {new Date().getFullYear()} EduSmartHub. All rights reserved.</span>
+            <span>Built with AI-powered tools for modern learners.</span>
+          </div>
+        </div>
+      </footer>
 
       {showLogin && (
         <Modal title="Login" onClose={() => { setShowLogin(false); setLoginError(''); }} maxWidthClass="max-w-md">

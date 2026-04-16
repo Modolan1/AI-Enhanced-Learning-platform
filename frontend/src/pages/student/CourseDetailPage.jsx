@@ -65,6 +65,8 @@ export default function CourseDetailPage() {
   const [confirmingPayment, setConfirmingPayment] = useState(false);
   const [enrolled, setEnrolled] = useState(false);
   const [expandCurriculum, setExpandCurriculum] = useState(false);
+  const [reviewForm, setReviewForm] = useState({ rating: 5, comment: '' });
+  const [submittingReview, setSubmittingReview] = useState(false);
 
   const clearPaymentQueryParam = () => {
     const params = new URLSearchParams(location.search);
@@ -183,6 +185,50 @@ export default function CourseDetailPage() {
       setError(err?.response?.data?.message || 'Payment failed. Please try again.');
     } finally {
       setPaying(false);
+    }
+  };
+
+  const handleSubmitReview = async (event) => {
+    event.preventDefault();
+    try {
+      setSubmittingReview(true);
+      setError('');
+      await studentService.submitCourseReview(id, {
+        rating: Number(reviewForm.rating),
+        comment: reviewForm.comment,
+      });
+      // Reload the course data to show updated rating
+      await studentService.getCourseDetail(id);
+      setData((prevData) => {
+        const updated = { ...prevData };
+        if (!updated.course) return prevData;
+        updated.course.reviews = updated.course.reviews || [];
+        const existingIdx = updated.course.reviews.findIndex((r) => String(r.student?._id) === String(r.student || ''));
+        if (existingIdx >= 0) {
+          updated.course.reviews[existingIdx] = {
+            ...updated.course.reviews[existingIdx],
+            rating: Number(reviewForm.rating),
+            comment: reviewForm.comment,
+          };
+        } else {
+          updated.course.reviews.push({
+            student: { firstName: 'You', lastName: '' },
+            rating: Number(reviewForm.rating),
+            comment: reviewForm.comment,
+          });
+        }
+        const visibleReviews = (updated.course.reviews || []).filter((r) => !r.isHidden && r.moderationStatus !== 'hidden' && r.moderationStatus !== 'reported');
+        const avgRating = visibleReviews.length ? Number((visibleReviews.reduce((sum, r) => sum + Number(r.rating || 0), 0) / visibleReviews.length).toFixed(1)) : 0;
+        updated.course.rating = avgRating;
+        updated.course.reviewCount = visibleReviews.length;
+        return updated;
+      });
+      setReviewForm({ rating: 5, comment: '' });
+    } catch (err) {
+      console.error('Failed to submit review:', err);
+      setError(err?.response?.data?.message || 'Unable to submit review. Please try again.');
+    } finally {
+      setSubmittingReview(false);
     }
   };
 
@@ -399,6 +445,90 @@ export default function CourseDetailPage() {
                   )}
                 </>
               )}
+            </section>
+
+            {/* Reviews Section */}
+            <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+              <h2 className="mb-4 text-xl font-bold text-slate-900">Course Reviews</h2>
+              
+              {/* Rating Summary */}
+              <div className="mb-6 rounded-xl bg-slate-50 p-4">
+                <div className="flex items-center gap-4">
+                  <div>
+                    <div className="text-4xl font-bold text-slate-900">{rating.toFixed(1)}</div>
+                    <StarRating value={Math.round(rating)} />
+                    <p className="mt-1 text-sm text-slate-600">{reviewCount} review{reviewCount !== 1 ? 's' : ''}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Review Form - Only show for paid students */}
+              {data?.access?.isPaid && (
+                <form onSubmit={handleSubmitReview} className="mb-6 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <h3 className="mb-3 text-sm font-semibold text-slate-700">Share Your Feedback</h3>
+                  <div className="mb-3">
+                    <label className="mb-2 block text-xs font-medium text-slate-600">Your Rating</label>
+                    <select
+                      value={reviewForm.rating}
+                      onChange={(e) => setReviewForm((prev) => ({ ...prev, rating: Number(e.target.value) }))}
+                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                    >
+                      {[5, 4, 3, 2, 1].map((star) => (
+                        <option key={star} value={star}>{star} Star{star > 1 ? 's' : ''}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="mb-3">
+                    <label className="mb-2 block text-xs font-medium text-slate-600">Comment (Optional)</label>
+                    <textarea
+                      value={reviewForm.comment}
+                      onChange={(e) => setReviewForm((prev) => ({ ...prev, comment: e.target.value }))}
+                      maxLength={1000}
+                      rows={3}
+                      placeholder="Share what you liked, what you learned, and suggestions for improvement..."
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700 placeholder-slate-400 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                    />
+                    <div className="mt-1 text-xs text-slate-500">{reviewForm.comment.length}/1000</div>
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={submittingReview}
+                    className="w-full rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:opacity-60"
+                  >
+                    {submittingReview ? 'Submitting...' : 'Submit Review'}
+                  </button>
+                </form>
+              )}
+
+              {!data?.access?.isPaid && (
+                <div className="mb-6 rounded-xl bg-blue-50 p-4 text-sm text-blue-700">
+                  <p>Complete payment to unlock the ability to review this course.</p>
+                </div>
+              )}
+
+              {/* Reviews List */}
+              <div className="space-y-3">
+                {(data?.course?.reviews || []).filter((r) => !r.isHidden && r.moderationStatus !== 'hidden' && r.moderationStatus !== 'reported').length === 0 ? (
+                  <p className="py-4 text-center text-sm text-slate-500">No reviews yet. Be the first to review!</p>
+                ) : (
+                  (data?.course?.reviews || [])
+                    .filter((r) => !r.isHidden && r.moderationStatus !== 'hidden' && r.moderationStatus !== 'reported')
+                    .map((review, idx) => (
+                      <div key={idx} className="rounded-lg border border-slate-200 p-4">
+                        <div className="mb-2 flex items-center justify-between">
+                          <div className="font-semibold text-slate-900">
+                            {review.student?.firstName || 'Student'} {review.student?.lastName || ''}
+                          </div>
+                          <div className="text-xs text-slate-500">
+                            {review.updatedAt ? new Date(review.updatedAt).toLocaleDateString() : new Date(review.createdAt).toLocaleDateString()}
+                          </div>
+                        </div>
+                        <div className="mb-2"><StarRating value={Number(review.rating || 0)} /></div>
+                        {review.comment && <p className="text-sm text-slate-700">{review.comment}</p>}
+                      </div>
+                    ))
+                )}
+              </div>
             </section>
           </div>
 

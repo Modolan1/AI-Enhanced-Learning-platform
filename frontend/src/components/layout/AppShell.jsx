@@ -82,7 +82,7 @@ export default function AppShell({ children, navItems, title }) {
             <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-teal-400 to-cyan-400 text-slate-900 shadow-md">
               <BrainCircuit size={20} />
             </span>
-            <h1 className="text-2xl font-bold tracking-tight text-white">LearnWithAI</h1>
+            <h1 className="text-2xl font-bold tracking-tight text-white">EduSmartHub</h1>
           </div>
           <p className="mt-1 text-sm text-slate-300">{title}</p>
         </div>

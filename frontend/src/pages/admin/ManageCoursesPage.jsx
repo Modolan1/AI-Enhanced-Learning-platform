@@ -14,6 +14,12 @@ function getThumbnailUrl(thumbnail) {
   return `${apiOrigin}${thumbnail.startsWith('/') ? thumbnail : `/${thumbnail}`}`;
 }
 
+function getAssetUrl(url) {
+  if (!url) return '';
+  if (/^https?:\/\//i.test(url)) return url;
+  return `${apiOrigin}${url.startsWith('/') ? url : `/${url}`}`;
+}
+
 export default function ManageCoursesPage() {
   const toast = useToast();
   const [courses, setCourses] = useState([]);
@@ -320,6 +326,7 @@ export default function ManageCoursesPage() {
             </div>
             <div className="space-y-3">
               <div className="text-sm font-medium text-slate-700">Modules</div>
+              <p className="text-xs text-slate-500">Upload module video/resource files here. URLs are filled automatically before you save the course.</p>
               {form.modules.map((module, idx) => (
                 <div key={idx} className="rounded-xl border border-slate-200 p-3">
                   <Input label={`Module ${idx + 1} Title`} value={module.title} onChange={(e) => updateModule(idx, 'title', e.target.value)} />
@@ -343,7 +350,16 @@ export default function ManageCoursesPage() {
                     />
                   </div>
                   <div className="mt-3 grid grid-cols-1 gap-3">
-                    <Input label="Video URL" value={module.videoUrl || ''} onChange={(e) => updateModule(idx, 'videoUrl', e.target.value)} />
+                    {module.videoUrl && (
+                      <a
+                        href={getAssetUrl(module.videoUrl)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-block text-xs font-medium text-indigo-600"
+                      >
+                        Open uploaded video
+                      </a>
+                    )}
                     <div>
                       <label className="mb-2 block text-sm font-medium text-slate-700">Upload Module Video</label>
                       <input
@@ -355,7 +371,16 @@ export default function ManageCoursesPage() {
                       />
                       {uploadingModuleAssetKey === `${idx}-video` && <p className="mt-1 text-xs text-slate-500">Uploading video...</p>}
                     </div>
-                    <Input label="Resource URL" value={module.resourceUrl || ''} onChange={(e) => updateModule(idx, 'resourceUrl', e.target.value)} />
+                    {module.resourceUrl && (
+                      <a
+                        href={getAssetUrl(module.resourceUrl)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-block text-xs font-medium text-indigo-600"
+                      >
+                        Open uploaded resource
+                      </a>
+                    )}
                     <div>
                       <label className="mb-2 block text-sm font-medium text-slate-700">Upload Module Resource File</label>
                       <input

@@ -11,6 +11,20 @@ function clampPercent(value) {
   return Math.max(0, Math.min(100, Math.round(num)));
 }
 
+function StarRating({ value = 0 }) {
+  const stars = [];
+  for (let i = 1; i <= 5; i++) {
+    if (value >= i) {
+      stars.push(<span key={i} className="text-amber-400">★</span>);
+    } else if (value >= i - 0.5) {
+      stars.push(<span key={i} className="text-amber-400">✦</span>);
+    } else {
+      stars.push(<span key={i} className="text-slate-300">☆</span>);
+    }
+  }
+  return <span className="text-sm">{stars}</span>;
+}
+
 export default function MyLearningPage() {
   const [progress, setProgress] = useState([]);
   const [error, setError] = useState('');
@@ -85,6 +99,19 @@ export default function MyLearningPage() {
                 <div className="text-xs font-medium uppercase tracking-wide text-indigo-600">{course.category?.name || 'Course'}</div>
                 <h3 className="mt-2 text-xl font-bold text-slate-900">{course.title || 'Untitled course'}</h3>
                 <p className="mt-2 text-sm text-slate-600">{course.description || 'Continue your learning journey.'}</p>
+
+                {/* Rating */}
+                <div className="mt-3 flex items-center gap-2">
+                  {Number(course.rating || 0) > 0 ? (
+                    <>
+                      <StarRating value={Number(course.rating || 0)} />
+                      <span className="text-xs font-semibold text-slate-700">{Number(course.rating || 0).toFixed(1)}</span>
+                      <span className="text-xs text-slate-500">({course.reviewCount || 0})</span>
+                    </>
+                  ) : (
+                    <span className="text-xs italic text-slate-400">Not rated yet</span>
+                  )}
+                </div>
 
                 <div className="mt-4">
                   <div className="mb-1 flex items-center justify-between text-xs text-slate-600">

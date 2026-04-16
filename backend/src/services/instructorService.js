@@ -161,6 +161,10 @@ export const instructorService = {
         level: course.level,
         durationHours: course.durationHours,
         thumbnail: course.thumbnail,
+        overviewNotes: course.overviewNotes || '',
+        announcements: course.announcements || [],
+        modules: course.modules || [],
+        isPublished: course.isPublished,
         enrollmentCount: courseEnrollments.length,
         createdAt: course.createdAt,
         updatedAt: course.updatedAt,
@@ -234,5 +238,35 @@ export const instructorService = {
       fileUrl: assetUrl,
       module,
     };
+  },
+
+  async updateOwnCourse(instructorId, courseId, payload) {
+    const course = await courseRepository.findById(courseId);
+    if (!course) throw new Error('Course not found');
+
+    const isOwner = String(course.createdBy?._id || course.createdBy) === String(instructorId);
+    if (!isOwner) throw new Error('You can only update your own courses');
+
+    const safeUpdates = {
+      title: payload.title,
+      description: payload.description,
+      category: payload.category,
+      level: payload.level,
+      durationHours: payload.durationHours,
+      thumbnail: payload.thumbnail,
+      overviewNotes: payload.overviewNotes,
+      announcements: payload.announcements,
+      modules: payload.modules,
+    };
+
+    Object.keys(safeUpdates).forEach((key) => {
+      if (safeUpdates[key] !== undefined) {
+        course[key] = safeUpdates[key];
+      }
+    });
+
+    // Instructors are not allowed to publish/unpublish courses.
+    const updated = await course.save();
+    return updated;
   },
 };

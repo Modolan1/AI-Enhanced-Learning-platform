@@ -62,3 +62,17 @@ export const uploadCourseModuleAsset = asyncHandler(async (req, res) => {
   const data = await instructorService.uploadCourseModuleAsset(req.user.userId, req.body, file);
   res.status(201).json({ success: true, data });
 });
+
+export const uploadCourseThumbnail = asyncHandler(async (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ success: false, message: 'No file uploaded' });
+  }
+
+  const fileUrl = `/uploads/course-thumbnails/${req.file.filename}`;
+  res.json({ success: true, data: { thumbnail: fileUrl, filename: req.file.filename } });
+});
+
+export const updateOwnCourse = asyncHandler(async (req, res) => {
+  const data = await instructorService.updateOwnCourse(req.user.userId, req.params.id, req.body);
+  res.json({ success: true, data });
+});
