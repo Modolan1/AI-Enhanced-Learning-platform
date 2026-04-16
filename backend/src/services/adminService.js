@@ -6,6 +6,18 @@ import { progressRepository } from '../repositories/progressRepository.js';
 import { userRepository } from '../repositories/userRepository.js';
 import { flashcardRepository } from '../repositories/flashcardRepository.js';
 
+const recomputeVisibleReviewStats = (course) => {
+  const visibleReviews = (course.reviews || []).filter((item) => !item.isHidden && item.moderationStatus === 'visible');
+  const reviewCount = visibleReviews.length;
+  const rating = reviewCount
+    ? Number((visibleReviews.reduce((sum, item) => sum + Number(item.rating || 0), 0) / reviewCount).toFixed(1))
+    : 0;
+
+  course.reviewCount = reviewCount;
+  course.rating = rating;
+  return { reviewCount, rating, visibleReviews };
+};
+
 export const adminService = {
   async getDashboard() {
     const [students, courses, quizzes, attempts, progress, flashcards, categories] = await Promise.all([
@@ -130,6 +142,8 @@ export const adminService = {
     level: data.level,
     durationHours: data.durationHours,
     thumbnail: data.thumbnail || '',
+    overviewNotes: data.overviewNotes || '',
+    announcements: data.announcements || [],
     modules: data.modules || [],
     createdBy: adminId,
     isPublished: true,
@@ -139,6 +153,74 @@ export const adminService = {
     const course = await courseRepository.updateById(id, data);
     if (!course) throw new Error('Course not found');
     return course;
+  },
+  async uploadCourseModuleAsset(file, assetType = 'resource') {
+    if (!file) throw new Error('No module asset uploaded');
+    if (!['video', 'resource'].includes(assetType)) throw new Error('Invalid module asset type');
+
+    return {
+      assetType,
+      fileName: file.originalname,
+      fileSize: file.size,
+      fileUrl: `/uploads/course-modules/${file.filename}`,
+    };
+  },
+  async moderateCourseReview(adminId, courseId, reviewId, payload = {}) {
+    const course = await courseRepository.findById(courseId);
+    if (!course) throw new Error('Course not found');
+
+    const review = (course.reviews || []).find((item) => String(item._id) === String(reviewId));
+    if (!review) throw new Error('Review not found');
+
+    const action = payload.action;
+    const reason = String(payload.reason || '').trim();
+
+    if (action === 'hide') {
+      review.isHidden = true;
+      review.moderationStatus = 'hidden';
+      review.reportReason = reason;
+    }
+
+    if (action === 'report') {
+      review.moderationStatus = 'reported';
+      review.reportReason = reason;
+    }
+
+    if (action === 'show') {
+      review.isHidden = false;
+      review.moderationStatus = 'visible';
+      review.reportReason = '';
+    }
+
+    review.moderatedBy = adminId;
+    review.moderatedAt = new Date();
+
+    const stats = recomputeVisibleReviewStats(course);
+    await course.save();
+
+    return {
+      updated: true,
+      review,
+      rating: stats.rating,
+      reviewCount: stats.reviewCount,
+    };
+  },
+  async deleteCourseReview(courseId, reviewId) {
+    const course = await courseRepository.findById(courseId);
+    if (!course) throw new Error('Course not found');
+
+    const before = (course.reviews || []).length;
+    course.reviews = (course.reviews || []).filter((item) => String(item._id) !== String(reviewId));
+    if (course.reviews.length === before) throw new Error('Review not found');
+
+    const stats = recomputeVisibleReviewStats(course);
+    await course.save();
+
+    return {
+      deleted: true,
+      rating: stats.rating,
+      reviewCount: stats.reviewCount,
+    };
   },
   deleteCourse: async (id) => {
     const course = await courseRepository.deleteById(id);

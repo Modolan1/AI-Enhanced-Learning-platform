@@ -26,3 +26,10 @@ export const createContentSchema = z.object({
 });
 
 export const updateContentSchema = createContentSchema.partial();
+
+export const uploadCourseModuleAssetSchema = z.object({
+  courseId: z.string().regex(/^[a-f\d]{24}$/i, 'Invalid course ID'),
+  moduleIndex: z.coerce.number().int().min(1),
+  assetType: z.enum(['video', 'resource']),
+  resourceTitle: z.string().trim().max(180).optional().default(''),
+});

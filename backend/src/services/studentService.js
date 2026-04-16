@@ -112,6 +112,17 @@ const filterByEnrolledCourse = (items = [], enrolledCourseIds, getCourseId) => i
   return courseId && enrolledCourseIds.has(courseId);
 });
 
+const getVisibleReviews = (reviews = []) => reviews.filter((item) => !item?.isHidden && item?.moderationStatus !== 'hidden' && item?.moderationStatus !== 'reported');
+
+const computeVisibleReviewSummary = (reviews = []) => {
+  const visibleReviews = getVisibleReviews(reviews);
+  const reviewCount = visibleReviews.length;
+  const rating = reviewCount
+    ? Number((visibleReviews.reduce((sum, item) => sum + Number(item?.rating || 0), 0) / reviewCount).toFixed(1))
+    : 0;
+  return { rating, reviewCount, visibleReviews };
+};
+
 export const studentService = {
   getProfile: (studentId) => userRepository.findStudentById(studentId),
 
@@ -241,9 +252,19 @@ export const studentService = {
 
     const isEnrolled = Boolean(progress);
     const isPaid = progress?.paymentStatus === 'paid';
+    const sortedAnnouncements = [...(course.announcements || [])].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+    const { rating: visibleRating, reviewCount: visibleReviewCount, visibleReviews } = computeVisibleReviewSummary(course.reviews || []);
+    const sortedReviews = [...visibleReviews].sort((a, b) => new Date(b.updatedAt || b.createdAt || 0) - new Date(a.updatedAt || a.createdAt || 0));
 
     return {
       course,
+      overviewNotes: course.overviewNotes || course.description || '',
+      announcements: isPaid ? sortedAnnouncements : [],
+      reviews: isPaid ? sortedReviews : [],
+      reviewSummary: {
+        rating: Number(visibleRating || 0),
+        reviewCount: Number(visibleReviewCount || 0),
+      },
       lessons: isPaid ? (course.modules || []).map((module, index) => normalizeLesson(course, module, index)) : [],
       quizzes: isPaid ? quizzes : [],
       flashcards: isPaid ? flashcards : [],
@@ -271,6 +292,74 @@ export const studentService = {
         quizzes,
         attempts,
       }),
+    };
+  },
+
+  async submitCourseReview(studentId, courseId, payload = {}) {
+    const [course, progress] = await Promise.all([
+      courseRepository.findById(courseId),
+      progressRepository.findByStudentAndCourse(studentId, courseId),
+    ]);
+
+    if (!course) throw new Error('Course not found');
+    if (!progress) throw new Error('Please enroll in the course before posting a review');
+    if (progress.paymentStatus !== 'paid') throw new Error('Payment required. Please complete course payment to post a review.');
+
+    const rating = Number(payload.rating || 0);
+    if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+      throw new Error('Rating must be an integer between 1 and 5');
+    }
+
+    const comment = String(payload.comment || '').trim();
+    const reviews = [...(course.reviews || [])];
+    const existingIndex = reviews.findIndex((item) => String(item.student?._id || item.student) === String(studentId));
+
+    if (existingIndex >= 0) {
+      reviews[existingIndex] = {
+        ...reviews[existingIndex],
+        student: studentId,
+        rating,
+        comment,
+        moderationStatus: reviews[existingIndex].moderationStatus || 'visible',
+        isHidden: Boolean(reviews[existingIndex].isHidden),
+        updatedAt: new Date(),
+      };
+    } else {
+      reviews.push({
+        student: studentId,
+        rating,
+        comment,
+        moderationStatus: 'visible',
+        isHidden: false,
+      });
+    }
+
+    const { rating: averageRating, reviewCount } = computeVisibleReviewSummary(reviews);
+
+    course.reviews = reviews;
+    course.reviewCount = reviewCount;
+    course.rating = averageRating;
+    await course.save();
+
+    await activityRepository.create({
+      student: studentId,
+      activityType: 'course_review',
+      resourceType: 'course',
+      resourceId: courseId,
+      metadata: {
+        title: course.title,
+        rating,
+      },
+    });
+
+    const refreshed = await courseRepository.findById(courseId);
+    const { visibleReviews } = computeVisibleReviewSummary(refreshed?.reviews || []);
+    const sortedReviews = [...visibleReviews].sort((a, b) => new Date(b.updatedAt || b.createdAt || 0) - new Date(a.updatedAt || a.createdAt || 0));
+
+    return {
+      rating: Number(refreshed?.rating || averageRating),
+      reviewCount: Number(refreshed?.reviewCount || reviewCount),
+      reviews: sortedReviews,
     };
   },
 
@@ -927,11 +1016,28 @@ export const studentService = {
     return aiRecommendationService.generateAndSave(student, summary);
   },
 
-  async getInstructorContent(filter = {}) {
+  async getInstructorContent(studentId, filter = {}) {
+    const progress = await progressRepository.findByStudent(studentId);
+    const paidCategoryIds = new Set(
+      progress
+        .filter((item) => item?.paymentStatus === 'paid')
+        .map((item) => String(item?.course?.category?._id || item?.course?.category || ''))
+        .filter(Boolean)
+    );
+
+    if (!paidCategoryIds.size) return [];
+
     const query = {};
     if (filter.contentType) query.contentType = filter.contentType;
-    if (filter.category) query.category = filter.category;
-    return instructorContentRepository.findAllPublished(query);
+    const requestedCategory = String(filter.category || '');
+
+    if (requestedCategory) {
+      if (!paidCategoryIds.has(requestedCategory)) return [];
+      query.category = requestedCategory;
+    }
+
+    const content = await instructorContentRepository.findAllPublished(query);
+    return content.filter((item) => paidCategoryIds.has(String(item?.category?._id || item?.category || '')));
   },
 
   async generateStructuredContent(studentId, payload) {

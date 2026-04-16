@@ -95,14 +95,14 @@ export default function AppShell({ children, navItems, title }) {
         </nav>
       </aside>
       <main className="flex-1 p-4 md:p-6">
-        <header className="mb-6 flex items-center justify-between rounded-2xl border border-slate-200/80 bg-white/90 p-4 shadow-[0_10px_28px_-20px_rgba(15,23,42,0.45)] backdrop-blur">
+        <header className="relative z-40 mb-6 flex items-center justify-between overflow-visible rounded-2xl border border-slate-200/80 bg-white/90 p-4 shadow-[0_10px_28px_-20px_rgba(15,23,42,0.45)] backdrop-blur">
           <div>
             <h2 className="text-xl font-bold tracking-tight text-slate-900">{title}</h2>
             <p className="text-sm text-slate-500">{user?.firstName} {user?.lastName} • {user?.role}</p>
           </div>
           <div className="flex items-center gap-3">
             {isStudent && (
-              <div className="relative" ref={notificationMenuRef}>
+              <div className="relative z-50" ref={notificationMenuRef}>
                 <button
                   type="button"
                   onClick={handleNotificationToggle}
@@ -118,7 +118,7 @@ export default function AppShell({ children, navItems, title }) {
                 </button>
 
                 {isNotificationOpen && (
-                  <div className="absolute right-0 z-30 mt-2 w-[320px] rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-xl backdrop-blur">
+                  <div className="absolute right-0 z-[100] mt-2 w-[320px] rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-xl backdrop-blur">
                       <p className="text-sm font-semibold text-slate-900">Updates</p>
                       <span className="text-xs text-slate-500">Instructor & Admin</span>
 

@@ -11,6 +11,7 @@ export default function ManageContentPage() {
   const toast = useToast();
   const [content, setContent] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [myCourses, setMyCourses] = useState([]);
   const [error, setError] = useState('');
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState({
@@ -24,21 +25,57 @@ export default function ManageContentPage() {
   });
   const [documentFile, setDocumentFile] = useState(null);
   const [videoFile, setVideoFile] = useState(null);
+  const [moduleAssetFile, setModuleAssetFile] = useState(null);
+  const [uploadingModuleAsset, setUploadingModuleAsset] = useState(false);
+  const [moduleAssetForm, setModuleAssetForm] = useState({
+    courseId: '',
+    moduleIndex: 1,
+    assetType: 'resource',
+    resourceTitle: '',
+  });
 
   const load = async () => {
     try {
-      const [contentRes, categoryRes] = await Promise.all([
+      const [contentRes, categoryRes, coursesRes] = await Promise.all([
         instructorService.getContent(),
         instructorService.getCategories(),
+        instructorService.getMyCourses(),
       ]);
       setContent(contentRes.data);
       setCategories(categoryRes.data);
+      setMyCourses(coursesRes.data || []);
       if (!form.category && categoryRes.data[0]) {
         setForm((prev) => ({ ...prev, category: categoryRes.data[0]._id }));
+      }
+      if (!moduleAssetForm.courseId && coursesRes.data?.[0]) {
+        setModuleAssetForm((prev) => ({ ...prev, courseId: coursesRes.data[0]._id }));
       }
     } catch (err) {
       console.error('Failed to load instructor content:', err);
       setError('Failed to load content.');
+    }
+  };
+
+  const submitModuleAsset = async (event) => {
+    event.preventDefault();
+    if (!moduleAssetFile) {
+      toast('Please choose a file to upload', 'error');
+      return;
+    }
+
+    try {
+      setUploadingModuleAsset(true);
+      await instructorService.uploadCourseModuleAsset({
+        ...moduleAssetForm,
+        file: moduleAssetFile,
+      });
+      toast('Module asset uploaded and attached to course module');
+      setModuleAssetFile(null);
+      setModuleAssetForm((prev) => ({ ...prev, moduleIndex: 1, resourceTitle: '' }));
+    } catch (err) {
+      toast(err?.response?.data?.message || 'Failed to upload module asset', 'error');
+    } finally {
+      setUploadingModuleAsset(false);
     }
   };
 
@@ -151,6 +188,60 @@ export default function ManageContentPage() {
                 Cancel Edit
               </Button>
             )}
+          </form>
+
+          <hr className="my-6 border-slate-200" />
+
+          <h3 className="mb-3 text-lg font-semibold">Upload Course Module Asset</h3>
+          <form className="space-y-4" onSubmit={submitModuleAsset}>
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-700">Course</label>
+              <select
+                className="w-full rounded-xl border border-slate-200 p-3"
+                value={moduleAssetForm.courseId}
+                onChange={(e) => setModuleAssetForm((prev) => ({ ...prev, courseId: e.target.value }))}
+              >
+                {myCourses.map((course) => <option key={course._id} value={course._id}>{course.title}</option>)}
+              </select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <Input
+                label="Module Number"
+                type="number"
+                min={1}
+                value={moduleAssetForm.moduleIndex}
+                onChange={(e) => setModuleAssetForm((prev) => ({ ...prev, moduleIndex: Number(e.target.value) }))}
+              />
+              <div>
+                <label className="mb-2 block text-sm font-medium text-slate-700">Asset Type</label>
+                <select
+                  className="w-full rounded-xl border border-slate-200 p-3"
+                  value={moduleAssetForm.assetType}
+                  onChange={(e) => setModuleAssetForm((prev) => ({ ...prev, assetType: e.target.value }))}
+                >
+                  <option value="resource">Resource</option>
+                  <option value="video">Video</option>
+                </select>
+              </div>
+            </div>
+            {moduleAssetForm.assetType === 'resource' && (
+              <Input
+                label="Resource Title"
+                value={moduleAssetForm.resourceTitle}
+                onChange={(e) => setModuleAssetForm((prev) => ({ ...prev, resourceTitle: e.target.value }))}
+              />
+            )}
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-700">Upload File</label>
+              <input
+                type="file"
+                accept={moduleAssetForm.assetType === 'video' ? 'video/*' : '.pdf,.doc,.docx,.ppt,.pptx,.txt'}
+                onChange={(e) => setModuleAssetFile(e.target.files?.[0] || null)}
+              />
+            </div>
+            <Button className="w-full" type="submit" disabled={uploadingModuleAsset}>
+              {uploadingModuleAsset ? 'Uploading...' : 'Upload Module Asset'}
+            </Button>
           </form>
         </Card>
 

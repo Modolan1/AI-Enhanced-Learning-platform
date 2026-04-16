@@ -14,5 +14,16 @@ export const instructorService = {
   updateContent: async (id, formData) => (await API.put(`/instructor/content/${id}`, formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   })).data,
+  uploadCourseModuleAsset: async (payload) => {
+    const formData = new FormData();
+    formData.append('courseId', payload.courseId);
+    formData.append('moduleIndex', String(payload.moduleIndex));
+    formData.append('assetType', payload.assetType);
+    formData.append('resourceTitle', payload.resourceTitle || '');
+    formData.append('file', payload.file);
+    return (await API.post('/instructor/courses/upload/module-asset', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })).data;
+  },
   deleteContent: async (id) => (await API.delete(`/instructor/content/${id}`)).data,
 };

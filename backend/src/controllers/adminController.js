@@ -85,6 +85,24 @@ export const deleteCourse = asyncHandler(async (req, res) => {
   res.json({ success: true, message: 'Course deleted' });
 });
 
+export const uploadCourseModuleAsset = asyncHandler(async (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ success: false, message: 'No file uploaded' });
+  }
+  const data = await adminService.uploadCourseModuleAsset(req.file, req.body.assetType);
+  res.json({ success: true, data });
+});
+
+export const moderateCourseReview = asyncHandler(async (req, res) => {
+  const data = await adminService.moderateCourseReview(req.user.userId, req.params.id, req.params.reviewId, req.body);
+  res.json({ success: true, data });
+});
+
+export const deleteCourseReview = asyncHandler(async (req, res) => {
+  const data = await adminService.deleteCourseReview(req.params.id, req.params.reviewId);
+  res.json({ success: true, data });
+});
+
 export const getQuizzes = asyncHandler(async (req, res) => {
   res.json({ success: true, data: await adminService.listQuizzes() });
 });

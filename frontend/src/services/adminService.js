@@ -27,6 +27,16 @@ export const adminService = {
       headers: { 'Content-Type': 'multipart/form-data' }
     })).data;
   },
+  uploadCourseModuleAsset: async (file, assetType = 'resource') => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('assetType', assetType);
+    return (await API.post('/admin/courses/upload/module-asset', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })).data;
+  },
+  moderateCourseReview: async (courseId, reviewId, payload) => (await API.patch(`/admin/courses/${courseId}/reviews/${reviewId}/moderate`, payload)).data,
+  deleteCourseReview: async (courseId, reviewId) => (await API.delete(`/admin/courses/${courseId}/reviews/${reviewId}`)).data,
   getQuizzes: async () => (await API.get('/admin/quizzes')).data,
   createQuiz: async (payload) => (await API.post('/admin/quizzes', payload)).data,
   updateQuiz: async (id, payload) => (await API.put(`/admin/quizzes/${id}`, payload)).data,

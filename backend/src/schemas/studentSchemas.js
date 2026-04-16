@@ -48,3 +48,8 @@ export const payForCourseSchema = z.object({
 export const confirmCoursePaymentSchema = z.object({
   sessionId: z.string().trim().min(6, 'Checkout session id is required'),
 });
+
+export const submitCourseReviewSchema = z.object({
+  rating: z.coerce.number().int().min(1).max(5),
+  comment: z.string().trim().max(1000).optional().default(''),
+});

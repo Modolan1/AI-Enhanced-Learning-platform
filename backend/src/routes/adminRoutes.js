@@ -2,12 +2,13 @@ import express from 'express';
 import { protect } from '../middleware/authMiddleware.js';
 import { authorizeRoles } from '../middleware/roleMiddleware.js';
 import { validateObjectId } from '../middleware/validateObjectId.js';
-import { uploadThumbnail } from '../middleware/uploadMiddleware.js';
+import { uploadModuleAsset, uploadThumbnail } from '../middleware/uploadMiddleware.js';
 import { validate } from '../middleware/validate.js';
 import {
   updateProfileSchema, updateStudentSchema, updateInstructorSchema,
   createCategorySchema, updateCategorySchema,
   createCourseSchema, updateCourseSchema,
+  moderateCourseReviewSchema,
   createQuizSchema, updateQuizSchema,
   createFlashcardSchema, updateFlashcardSchema,
 } from '../schemas/adminSchemas.js';
@@ -15,6 +16,7 @@ import {
   getDashboard, getProfile, updateProfile, getStudents, getInstructors, getAdmins, getStudentById, updateStudent, deleteStudent, updateInstructor, deleteInstructor,
   getCategories, createCategory, updateCategory, deleteCategory, getCategoryAnalytics,
   getCourses, createCourse, updateCourse, deleteCourse, uploadCourseThumbnail,
+  uploadCourseModuleAsset, moderateCourseReview, deleteCourseReview,
   getQuizzes, createQuiz, updateQuiz, deleteQuiz,
   getFlashcards, createFlashcard, updateFlashcard, deleteFlashcard,
 } from '../controllers/adminController.js';
@@ -40,8 +42,11 @@ router.delete('/categories/:id', validateObjectId, deleteCategory);
 router.get('/analytics/categories', getCategoryAnalytics);
 router.get('/courses', getCourses);
 router.post('/courses/upload/thumbnail', uploadThumbnail.single('thumbnail'), uploadCourseThumbnail);
+router.post('/courses/upload/module-asset', uploadModuleAsset.single('file'), uploadCourseModuleAsset);
 router.post('/courses', validate(createCourseSchema), createCourse);
 router.put('/courses/:id', validateObjectId, validate(updateCourseSchema), updateCourse);
+router.patch('/courses/:id/reviews/:reviewId/moderate', validateObjectId, validate(moderateCourseReviewSchema), moderateCourseReview);
+router.delete('/courses/:id/reviews/:reviewId', validateObjectId, deleteCourseReview);
 router.delete('/courses/:id', validateObjectId, deleteCourse);
 router.get('/quizzes', getQuizzes);
 router.post('/quizzes', validate(createQuizSchema), createQuiz);

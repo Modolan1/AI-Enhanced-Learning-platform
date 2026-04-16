@@ -21,9 +21,14 @@ export default function ManageCoursesPage() {
   const [editingId, setEditingId] = useState(null);
   const [thumbnailPreview, setThumbnailPreview] = useState(null);
   const [isUploadingThumbnail, setIsUploadingThumbnail] = useState(false);
+  const [uploadingModuleAssetKey, setUploadingModuleAssetKey] = useState('');
+  const [moderatingReviewKey, setModeratingReviewKey] = useState('');
+  const [reportReasons, setReportReasons] = useState({});
   const [form, setForm] = useState({
     title: '', description: '', category: '', level: 'Beginner', durationHours: 1, thumbnail: '', isPublished: true,
-    modules: [{ title: '', durationMinutes: 20, type: 'reading' }],
+    overviewNotes: '',
+    announcements: [{ title: '', message: '' }],
+    modules: [{ title: '', durationMinutes: 20, type: 'reading', textContent: '', videoUrl: '', resourceUrl: '', resourceTitle: '' }],
   });
 
   const load = async () => {
@@ -40,12 +45,31 @@ export default function ManageCoursesPage() {
     setForm({ ...form, modules: next });
   };
 
-  const addModule = () => setForm({ ...form, modules: [...form.modules, { title: '', durationMinutes: 20, type: 'reading' }] });
+  const addModule = () => setForm({ ...form, modules: [...form.modules, { title: '', durationMinutes: 20, type: 'reading', textContent: '', videoUrl: '', resourceUrl: '', resourceTitle: '' }] });
+
+  const updateAnnouncement = (index, field, value) => {
+    const next = [...form.announcements];
+    next[index] = { ...next[index], [field]: value };
+    setForm({ ...form, announcements: next });
+  };
+
+  const addAnnouncement = () => setForm({ ...form, announcements: [...form.announcements, { title: '', message: '' }] });
 
   const resetForm = () => {
     setEditingId(null);
     setThumbnailPreview(null);
-    setForm({ title: '', description: '', category: categories[0]?._id || '', level: 'Beginner', durationHours: 1, thumbnail: '', isPublished: true, modules: [{ title: '', durationMinutes: 20, type: 'reading' }] });
+    setForm({
+      title: '',
+      description: '',
+      category: categories[0]?._id || '',
+      level: 'Beginner',
+      durationHours: 1,
+      thumbnail: '',
+      isPublished: true,
+      overviewNotes: '',
+      announcements: [{ title: '', message: '' }],
+      modules: [{ title: '', durationMinutes: 20, type: 'reading', textContent: '', videoUrl: '', resourceUrl: '', resourceTitle: '' }],
+    });
   };
 
   const startEdit = (course) => {
@@ -59,7 +83,21 @@ export default function ManageCoursesPage() {
       durationHours: course.durationHours,
       thumbnail: course.thumbnail || '',
       isPublished: course.isPublished ?? true,
-      modules: course.modules?.length ? course.modules.map((m) => ({ title: m.title, durationMinutes: m.durationMinutes, type: m.type })) : [{ title: '', durationMinutes: 20, type: 'reading' }],
+      overviewNotes: course.overviewNotes || '',
+      announcements: course.announcements?.length
+        ? course.announcements.map((item) => ({ title: item.title || '', message: item.message || '' }))
+        : [{ title: '', message: '' }],
+      modules: course.modules?.length
+        ? course.modules.map((m) => ({
+          title: m.title,
+          durationMinutes: m.durationMinutes,
+          type: m.type,
+          textContent: m.textContent || '',
+          videoUrl: m.videoUrl || '',
+          resourceUrl: m.resourceUrl || '',
+          resourceTitle: m.resourceTitle || '',
+        }))
+        : [{ title: '', durationMinutes: 20, type: 'reading', textContent: '', videoUrl: '', resourceUrl: '', resourceTitle: '' }],
     });
   };
 
@@ -89,17 +127,83 @@ export default function ManageCoursesPage() {
   const submit = async (e) => {
     e.preventDefault();
     try {
+      const sanitizedAnnouncements = (form.announcements || []).filter((item) => item.title?.trim() && item.message?.trim());
+      const payload = {
+        ...form,
+        durationHours: Number(form.durationHours),
+        announcements: sanitizedAnnouncements,
+      };
       if (editingId) {
-        await adminService.updateCourse(editingId, { ...form, durationHours: Number(form.durationHours) });
+        await adminService.updateCourse(editingId, payload);
         toast('Course updated successfully');
       } else {
-        await adminService.createCourse({ ...form, durationHours: Number(form.durationHours) });
+        await adminService.createCourse(payload);
         toast('Course created successfully');
       }
       resetForm();
       load();
     } catch (err) {
       toast(err?.response?.data?.message || 'Failed to save course', 'error');
+    }
+  };
+
+  const handleModuleAssetUpload = async (moduleIndex, assetType, file) => {
+    if (!file) return;
+
+    const key = `${moduleIndex}-${assetType}`;
+    try {
+      setUploadingModuleAssetKey(key);
+      const response = await adminService.uploadCourseModuleAsset(file, assetType);
+      const url = response.data?.fileUrl || '';
+
+      if (!url) {
+        toast('Upload completed but no file URL was returned', 'error');
+        return;
+      }
+
+      if (assetType === 'video') {
+        updateModule(moduleIndex, 'videoUrl', url);
+      } else {
+        updateModule(moduleIndex, 'resourceUrl', url);
+        if (!form.modules[moduleIndex]?.resourceTitle) {
+          updateModule(moduleIndex, 'resourceTitle', response.data?.fileName || file.name || 'Module resource');
+        }
+      }
+
+      toast('Module asset uploaded successfully');
+    } catch (err) {
+      toast(err?.response?.data?.message || 'Failed to upload module asset', 'error');
+    } finally {
+      setUploadingModuleAssetKey('');
+    }
+  };
+
+  const moderateReview = async (courseId, reviewId, action) => {
+    try {
+      setModeratingReviewKey(`${courseId}:${reviewId}:${action}`);
+      await adminService.moderateCourseReview(courseId, reviewId, {
+        action,
+        reason: action === 'report' ? (reportReasons[`${courseId}:${reviewId}`] || '') : '',
+      });
+      toast(`Review ${action} action completed`);
+      await load();
+    } catch (err) {
+      toast(err?.response?.data?.message || 'Failed to moderate review', 'error');
+    } finally {
+      setModeratingReviewKey('');
+    }
+  };
+
+  const removeReview = async (courseId, reviewId) => {
+    try {
+      setModeratingReviewKey(`${courseId}:${reviewId}:delete`);
+      await adminService.deleteCourseReview(courseId, reviewId);
+      toast('Review deleted');
+      await load();
+    } catch (err) {
+      toast(err?.response?.data?.message || 'Failed to delete review', 'error');
+    } finally {
+      setModeratingReviewKey('');
     }
   };
 
@@ -132,6 +236,16 @@ export default function ManageCoursesPage() {
           <form onSubmit={submit} className="space-y-4">
             <Input label="Title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
             <Input label="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-700">Course Overview Notes</label>
+              <textarea
+                className="w-full rounded-xl border border-slate-200 p-3 text-sm"
+                rows={4}
+                value={form.overviewNotes}
+                onChange={(e) => setForm({ ...form, overviewNotes: e.target.value })}
+                placeholder="Detailed notes shown on the learning page"
+              />
+            </div>
             <div>
               <label className="mb-2 block text-sm font-medium text-slate-700">Category</label>
               <select className="w-full rounded-xl border border-slate-200 p-3" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>
@@ -187,6 +301,24 @@ export default function ManageCoursesPage() {
               </div>
             </label>
             <div className="space-y-3">
+              <div className="text-sm font-medium text-slate-700">Course Announcements</div>
+              {(form.announcements || []).map((item, idx) => (
+                <div key={`announcement-${idx}`} className="rounded-xl border border-slate-200 p-3">
+                  <Input label={`Announcement ${idx + 1} Title`} value={item.title} onChange={(e) => updateAnnouncement(idx, 'title', e.target.value)} />
+                  <div className="mt-3">
+                    <label className="mb-2 block text-sm font-medium text-slate-700">Message</label>
+                    <textarea
+                      className="w-full rounded-xl border border-slate-200 p-3 text-sm"
+                      rows={3}
+                      value={item.message}
+                      onChange={(e) => updateAnnouncement(idx, 'message', e.target.value)}
+                    />
+                  </div>
+                </div>
+              ))}
+              <Button type="button" variant="secondary" className="w-full" onClick={addAnnouncement}>Add Announcement</Button>
+            </div>
+            <div className="space-y-3">
               <div className="text-sm font-medium text-slate-700">Modules</div>
               {form.modules.map((module, idx) => (
                 <div key={idx} className="rounded-xl border border-slate-200 p-3">
@@ -199,6 +331,43 @@ export default function ManageCoursesPage() {
                         <option value="reading">Reading</option><option value="video">Video</option><option value="exercise">Exercise</option><option value="project">Project</option>
                       </select>
                     </div>
+                  </div>
+                  <div className="mt-3">
+                    <label className="mb-2 block text-sm font-medium text-slate-700">Module Notes</label>
+                    <textarea
+                      className="w-full rounded-xl border border-slate-200 p-3 text-sm"
+                      rows={3}
+                      value={module.textContent || ''}
+                      onChange={(e) => updateModule(idx, 'textContent', e.target.value)}
+                      placeholder="Key points or lesson overview"
+                    />
+                  </div>
+                  <div className="mt-3 grid grid-cols-1 gap-3">
+                    <Input label="Video URL" value={module.videoUrl || ''} onChange={(e) => updateModule(idx, 'videoUrl', e.target.value)} />
+                    <div>
+                      <label className="mb-2 block text-sm font-medium text-slate-700">Upload Module Video</label>
+                      <input
+                        type="file"
+                        accept="video/*"
+                        className="w-full rounded-xl border border-slate-200 p-2 text-sm"
+                        onChange={(e) => handleModuleAssetUpload(idx, 'video', e.target.files?.[0])}
+                        disabled={uploadingModuleAssetKey === `${idx}-video`}
+                      />
+                      {uploadingModuleAssetKey === `${idx}-video` && <p className="mt-1 text-xs text-slate-500">Uploading video...</p>}
+                    </div>
+                    <Input label="Resource URL" value={module.resourceUrl || ''} onChange={(e) => updateModule(idx, 'resourceUrl', e.target.value)} />
+                    <div>
+                      <label className="mb-2 block text-sm font-medium text-slate-700">Upload Module Resource File</label>
+                      <input
+                        type="file"
+                        accept=".pdf,.doc,.docx,.ppt,.pptx,.txt"
+                        className="w-full rounded-xl border border-slate-200 p-2 text-sm"
+                        onChange={(e) => handleModuleAssetUpload(idx, 'resource', e.target.files?.[0])}
+                        disabled={uploadingModuleAssetKey === `${idx}-resource`}
+                      />
+                      {uploadingModuleAssetKey === `${idx}-resource` && <p className="mt-1 text-xs text-slate-500">Uploading resource...</p>}
+                    </div>
+                    <Input label="Resource Title" value={module.resourceTitle || ''} onChange={(e) => updateModule(idx, 'resourceTitle', e.target.value)} />
                   </div>
                 </div>
               ))}
@@ -227,6 +396,71 @@ export default function ManageCoursesPage() {
                   <h3 className="mt-2 text-xl font-bold text-slate-900">{course.title}</h3>
                   <p className="mt-2 text-sm text-slate-600">{course.description}</p>
                   <div className="mt-3 text-sm text-slate-500">{course.level} • {course.durationHours} hour(s) • {course.modules?.length || 0} modules</div>
+
+                  <div className="mt-4 rounded-xl border border-slate-200 p-3">
+                    <div className="mb-2 text-sm font-semibold text-slate-800">Student Reviews Moderation</div>
+                    {!(course.reviews || []).length && <div className="text-xs text-slate-500">No reviews yet.</div>}
+                    <div className="space-y-3">
+                      {(course.reviews || []).slice(0, 5).map((review) => {
+                        const reviewKey = `${course._id}:${review._id}`;
+                        const statusLabel = review.isHidden ? 'hidden' : (review.moderationStatus || 'visible');
+                        return (
+                          <div key={review._id} className="rounded-lg border border-slate-200 p-3">
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="text-sm font-medium text-slate-800">
+                                {review.student?.firstName || 'Student'} {review.student?.lastName || ''}
+                              </div>
+                              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-700 capitalize">{statusLabel}</span>
+                            </div>
+                            <div className="mt-1 text-xs text-slate-500">Rating: {review.rating}/5</div>
+                            {review.comment && <p className="mt-2 text-sm text-slate-700">{review.comment}</p>}
+                            <div className="mt-2 grid gap-2 md:grid-cols-2">
+                              <input
+                                className="rounded-lg border border-slate-300 px-2 py-1 text-xs"
+                                placeholder="Report reason"
+                                value={reportReasons[reviewKey] || ''}
+                                onChange={(e) => setReportReasons((prev) => ({ ...prev, [reviewKey]: e.target.value }))}
+                              />
+                              <div className="flex flex-wrap gap-1">
+                                <button
+                                  type="button"
+                                  className="rounded-md bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-800"
+                                  onClick={() => moderateReview(course._id, review._id, 'report')}
+                                  disabled={moderatingReviewKey === `${course._id}:${review._id}:report`}
+                                >
+                                  Report
+                                </button>
+                                <button
+                                  type="button"
+                                  className="rounded-md bg-slate-200 px-2 py-1 text-xs font-semibold text-slate-800"
+                                  onClick={() => moderateReview(course._id, review._id, 'hide')}
+                                  disabled={moderatingReviewKey === `${course._id}:${review._id}:hide`}
+                                >
+                                  Hide
+                                </button>
+                                <button
+                                  type="button"
+                                  className="rounded-md bg-emerald-100 px-2 py-1 text-xs font-semibold text-emerald-800"
+                                  onClick={() => moderateReview(course._id, review._id, 'show')}
+                                  disabled={moderatingReviewKey === `${course._id}:${review._id}:show`}
+                                >
+                                  Show
+                                </button>
+                                <button
+                                  type="button"
+                                  className="rounded-md bg-rose-100 px-2 py-1 text-xs font-semibold text-rose-800"
+                                  onClick={() => removeReview(course._id, review._id)}
+                                  disabled={moderatingReviewKey === `${course._id}:${review._id}:delete`}
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
                 </div>
                 <div className="flex gap-2">
                   <Button variant="secondary" onClick={() => startEdit(course)}>Edit</Button>

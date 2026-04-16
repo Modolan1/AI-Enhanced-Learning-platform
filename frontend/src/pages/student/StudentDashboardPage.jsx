@@ -111,7 +111,7 @@ function mapActivity(activity) {
         badge: 'Profile',
         title: 'Subscription updated',
         detail: `${metadata.status || 'updated'} • ${metadata.plan || 'monthly'} plan`,
-        link: '/student/study-helper',
+        link: '/student/profile',
         linkLabel: 'Manage subscription',
       };
     case 'profile_update':
@@ -336,7 +336,7 @@ export default function StudentDashboardPage() {
             <h3 className="mb-4 text-lg font-semibold">Your Enrolled Courses</h3>
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {data.progress.map((item) => (
-                <Link key={item._id} to={`/student/courses/${item.course?._id}`} className="group">
+                <Link key={item._id} to={`/student/courses/${item.course?._id}/learn`} className="group">
                   <div className="rounded-xl border p-4 transition hover:border-indigo-300 hover:shadow-md">
                     <h4 className="font-semibold text-slate-900 group-hover:text-indigo-600">{item.course?.title}</h4>
                     <p className="mt-2 text-xs text-slate-500">{item.course?.category?.name}</p>

@@ -13,13 +13,14 @@ import {
   simulateSubscriptionSchema,
   payForCourseSchema,
   confirmCoursePaymentSchema,
+  submitCourseReviewSchema,
 } from '../schemas/studentSchemas.js';
 import { env } from '../config/env.js';
 import {
   getDashboard, getProfile, updateProfile, getCourses, getCourseDetail, getLessonDetail, enrollCourse, payForCourse, createStripeCourseCheckoutSession, confirmCoursePayment, completeLesson, getSubscription, simulateSubscription, getFlashcards, trackFlashcardReview, getQuizzes,
   submitQuiz, getAttempts, getRecommendations, refreshRecommendations, getDocumentUploadConfig,
   analyzeDocument, submitGeneratedDocumentQuiz, getDocumentHistory, getDocumentById, deleteDocument, askDocumentQuestion, generateStructuredContent,
-  getInstructorLearningContent
+  getInstructorLearningContent, submitCourseReview,
 } from '../controllers/studentController.js';
 
 const router = express.Router();
@@ -61,6 +62,7 @@ router.post('/courses/:id/enroll', validateObjectId, enrollCourse);
 router.post('/courses/:id/pay', validateObjectId, validate(payForCourseSchema), payForCourse);
 router.post('/courses/:id/pay/stripe/checkout-session', validateObjectId, createStripeCourseCheckoutSession);
 router.post('/courses/:id/pay/confirm', validateObjectId, validate(confirmCoursePaymentSchema), confirmCoursePayment);
+router.post('/courses/:id/reviews', validateObjectId, validate(submitCourseReviewSchema), submitCourseReview);
 router.post('/courses/:id/lessons/:lessonIndex/complete', validateObjectId, validate(completeLessonSchema), completeLesson);
 router.get('/subscription', getSubscription);
 router.post('/subscription/simulate', validate(simulateSubscriptionSchema), simulateSubscription);

@@ -56,3 +56,9 @@ export const getStudentsEnrolled = asyncHandler(async (req, res) => {
   const data = await instructorService.getStudentsEnrolled(req.user.userId);
   res.json({ success: true, data });
 });
+
+export const uploadCourseModuleAsset = asyncHandler(async (req, res) => {
+  const file = Array.isArray(req.files?.file) ? req.files.file[0] : req.file || null;
+  const data = await instructorService.uploadCourseModuleAsset(req.user.userId, req.body, file);
+  res.status(201).json({ success: true, data });
+});

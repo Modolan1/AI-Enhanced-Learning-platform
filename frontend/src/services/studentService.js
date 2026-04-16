@@ -19,6 +19,7 @@ export const studentService = {
   enrollCourse: async (id) => (await API.post(`/student/courses/${id}/enroll`)).data,
   payForCourse: async (id, payload = {}) => (await API.post(`/student/courses/${id}/pay`, payload)).data,
   confirmCoursePayment: async (id, sessionId) => (await API.post(`/student/courses/${id}/pay/confirm`, { sessionId })).data,
+  submitCourseReview: async (id, payload) => (await API.post(`/student/courses/${id}/reviews`, payload)).data,
   completeLesson: async (courseId, lessonIndex, completed = true) => (await API.post(`/student/courses/${courseId}/lessons/${lessonIndex}/complete`, { completed })).data,
   getSubscription: async () => (await API.get('/student/subscription')).data,
   simulateSubscription: async (payload) => (await API.post('/student/subscription/simulate', payload)).data,

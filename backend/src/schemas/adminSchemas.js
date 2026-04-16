@@ -44,11 +44,22 @@ export const createCourseSchema = z.object({
   level: z.enum(COURSE_LEVELS),
   durationHours: z.coerce.number().min(0).max(10000),
   thumbnail: z.string().trim().max(500).optional().default(''),
+  overviewNotes: z.string().trim().max(5000).optional().default(''),
+  announcements: z.array(z.object({
+    title: z.string().trim().min(1).max(180),
+    message: z.string().trim().min(1).max(2000),
+    createdAt: z.coerce.date().optional(),
+  })).optional().default([]),
   modules: z.array(z.any()).optional().default([]),
   isPublished: z.boolean().optional().default(true),
 });
 
 export const updateCourseSchema = createCourseSchema.partial();
+
+export const moderateCourseReviewSchema = z.object({
+  action: z.enum(['hide', 'report', 'show']),
+  reason: z.string().trim().max(1000).optional().default(''),
+});
 
 // ── Quiz ─────────────────────────────────────────────────────────────────────
 const quizQuestionSchema = z.object({

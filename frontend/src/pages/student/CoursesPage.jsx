@@ -109,7 +109,11 @@ export default function CoursesPage() {
                 Payment Pending - Complete payment to unlock lessons and materials
               </div>
             )}
-            <Link to={`/student/courses/${course._id}`}><Button className="mt-4 w-full">View Course Details</Button></Link>
+            {courseAccessById.get(course._id)?.isPaid ? (
+              <Link to={`/student/courses/${course._id}/learn`}><Button className="mt-4 w-full">Continue Learning</Button></Link>
+            ) : (
+              <Link to={`/student/courses/${course._id}`}><Button className="mt-4 w-full">View Course Details</Button></Link>
+            )}
           </Card>
         ))}
       </div>

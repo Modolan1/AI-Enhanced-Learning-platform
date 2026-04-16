@@ -45,6 +45,10 @@ export const confirmCoursePayment = asyncHandler(async (req, res) => {
   res.json({ success: true, data: await studentService.confirmStripeCoursePayment(req.user.userId, req.params.id, req.body.sessionId) });
 });
 
+export const submitCourseReview = asyncHandler(async (req, res) => {
+  res.status(201).json({ success: true, data: await studentService.submitCourseReview(req.user.userId, req.params.id, req.body) });
+});
+
 export const completeLesson = asyncHandler(async (req, res) => {
   res.json({
     success: true,
@@ -123,7 +127,7 @@ export const generateStructuredContent = asyncHandler(async (req, res) => {
 export const getInstructorLearningContent = asyncHandler(async (req, res) => {
   res.json({
     success: true,
-    data: await studentService.getInstructorContent({
+    data: await studentService.getInstructorContent(req.user.userId, {
       contentType: req.query.contentType,
       category: req.query.category,
     }),

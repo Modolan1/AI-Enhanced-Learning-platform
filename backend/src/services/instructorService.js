@@ -195,4 +195,44 @@ export const instructorService = {
       lastAccessedAt: enrollment.lastAccessedAt,
     })).sort((a, b) => new Date(b.enrollmentDate) - new Date(a.enrollmentDate));
   },
+
+  async uploadCourseModuleAsset(instructorId, payload, file) {
+    if (!file) throw new Error('No module asset uploaded');
+
+    const course = await courseRepository.findById(payload.courseId);
+    if (!course) throw new Error('Course not found');
+
+    const isOwner = String(course.createdBy?._id || course.createdBy) === String(instructorId);
+    if (!isOwner) throw new Error('You can only upload module assets for your own courses');
+
+    const modules = course.modules || [];
+    const moduleIndexZeroBased = Number(payload.moduleIndex) - 1;
+    if (moduleIndexZeroBased < 0 || moduleIndexZeroBased >= modules.length) {
+      throw new Error('Module not found');
+    }
+
+    const assetUrl = `/uploads/instructor-docs/${file.filename}`;
+    const module = modules[moduleIndexZeroBased];
+
+    if (payload.assetType === 'video') {
+      module.videoUrl = assetUrl;
+    }
+
+    if (payload.assetType === 'resource') {
+      module.resourceUrl = assetUrl;
+      module.resourceTitle = payload.resourceTitle || file.originalname || module.resourceTitle || `${module.title} resource`;
+    }
+
+    await course.save();
+
+    return {
+      courseId: course._id,
+      moduleIndex: moduleIndexZeroBased,
+      moduleNumber: moduleIndexZeroBased + 1,
+      assetType: payload.assetType,
+      fileName: file.originalname,
+      fileUrl: assetUrl,
+      module,
+    };
+  },
 };

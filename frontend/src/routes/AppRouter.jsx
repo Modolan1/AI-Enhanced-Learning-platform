@@ -12,6 +12,7 @@ import CategoriesAnalyticsPage from '../pages/admin/CategoriesAnalyticsPage';
 import StudentsPage from '../pages/admin/StudentsPage';
 import InstructorsPage from '../pages/admin/InstructorsPage';
 import StudentDashboardPage from '../pages/student/StudentDashboardPage';
+import MyLearningPage from '../pages/student/MyLearningPage';
 import CoursesPage from '../pages/student/CoursesPage';
 import CourseDetailPage from '../pages/student/CourseDetailPage';
 import MyCourseOverviewPage from '../pages/student/MyCourseOverviewPage';
@@ -20,9 +21,7 @@ import FlashcardsPage from '../pages/student/FlashcardsPage';
 import QuizzesPage from '../pages/student/QuizzesPage';
 import ProfilePage from '../pages/student/ProfilePage';
 import DocumentsPage from '../pages/student/DocumentsPage';
-import VideosPage from '../pages/student/VideosPage';
 import UpdatesPage from '../pages/student/UpdatesPage';
-import StudyHelperPage from '../pages/student/StudyHelperPage';
 import InstructorDashboardPage from '../pages/instructor/InstructorDashboardPage';
 import InstructorProfilePage from '../pages/instructor/InstructorProfilePage';
 import ManageContentPage from '../pages/instructor/ManageContentPage';
@@ -65,6 +64,7 @@ export default function AppRouter() {
       <Route path="/admin/instructors" element={<ProtectedRoute roles={['admin']}><InstructorsPage /></ProtectedRoute>} />
 
       <Route path="/student/dashboard" element={<ProtectedRoute roles={['student']}><StudentDashboardPage /></ProtectedRoute>} />
+      <Route path="/student/my-learning" element={<ProtectedRoute roles={['student']}><MyLearningPage /></ProtectedRoute>} />
       <Route path="/student/courses" element={<ProtectedRoute roles={['student']}><CoursesPage /></ProtectedRoute>} />
       <Route path="/student/courses/:id" element={<ProtectedRoute roles={['student']}><CourseDetailPage /></ProtectedRoute>} />
       <Route path="/student/courses/:id/learn" element={<ProtectedRoute roles={['student']}><MyCourseOverviewPage /></ProtectedRoute>} />
@@ -72,9 +72,7 @@ export default function AppRouter() {
       <Route path="/student/flashcards" element={<ProtectedRoute roles={['student']}><FlashcardsPage /></ProtectedRoute>} />
       <Route path="/student/quizzes" element={<ProtectedRoute roles={['student']}><QuizzesPage /></ProtectedRoute>} />
       <Route path="/student/documents" element={<ProtectedRoute roles={['student']}><DocumentsPage /></ProtectedRoute>} />
-      <Route path="/student/videos" element={<ProtectedRoute roles={['student']}><VideosPage /></ProtectedRoute>} />
       <Route path="/student/updates" element={<ProtectedRoute roles={['student']}><UpdatesPage /></ProtectedRoute>} />
-      <Route path="/student/study-helper" element={<ProtectedRoute roles={['student']}><StudyHelperPage /></ProtectedRoute>} />
       <Route path="/student/profile" element={<ProtectedRoute roles={['student']}><ProfilePage /></ProtectedRoute>} />
 
       <Route path="/instructor/dashboard" element={<ProtectedRoute roles={['instructor']}><InstructorDashboardPage /></ProtectedRoute>} />
