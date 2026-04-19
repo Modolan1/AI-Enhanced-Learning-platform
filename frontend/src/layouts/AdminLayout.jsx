@@ -7,7 +7,7 @@ const navItems = [
   { path: '/admin/categories', label: 'Manage Categories' },
   { path: '/admin/courses', label: 'Manage Courses' },
   { path: '/admin/quizzes', label: 'Manage Quizzes' },
-  { path: '/admin/flashcards', label: 'Manage Flashcards' },
+  { path: '/admin/flashcards', label: 'Manage Memory Cards' },
   { path: '/admin/analytics', label: 'Category Analytics' },
   { path: '/admin/students', label: 'Students' },
 ];

@@ -26,3 +26,13 @@ export const updatePassword = asyncHandler(async (req, res) => {
   const result = await authService.updatePassword(req.user.userId, oldPassword, newPassword);
   res.json({ success: true, data: result });
 });
+
+export const googleAuth = asyncHandler(async (req, res) => {
+  const { idToken } = req.body;
+  if (!idToken) {
+    res.status(400);
+    throw new Error('idToken is required');
+  }
+  const data = await authService.googleAuth(idToken);
+  res.json({ success: true, data });
+});

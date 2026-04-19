@@ -68,7 +68,7 @@ export default function InstructorsPage() {
         learningGoal: instructor.learningGoal,
         status,
       });
-      toast(status === 'active' ? 'Instructor approved' : 'Instructor application rejected');
+      toast(status === 'active' ? 'Instructor approved and course assigned' : 'Instructor application rejected');
       load();
     } catch (err) {
       const msg = err?.response?.data?.message || 'Failed to update instructor status.';
@@ -159,11 +159,12 @@ export default function InstructorsPage() {
                   </div>
                   <div className="text-sm text-slate-500">{instructor.email}</div>
                   <div className="mt-1 text-xs text-slate-400">{instructor.preferredSubject || 'No preferred subject'} • {instructor.skillLevel}</div>
+                  <div className="mt-1 text-xs text-slate-500">Requested course: {instructor.requestedCourse?.title || 'Not selected'}</div>
                   {instructor.learningGoal && <div className="mt-1 text-xs text-slate-400">Goal: {instructor.learningGoal}</div>}
                   <div className="mt-3 flex gap-2">
                     {activeTab === 'pending' && instructor.status === 'pending' && (
                       <>
-                        <Button onClick={() => updateInstructorStatus(instructor, 'active')}>Approve</Button>
+                        <Button onClick={() => updateInstructorStatus(instructor, 'active')}>Approve & Assign Course</Button>
                         <Button variant="secondary" onClick={() => updateInstructorStatus(instructor, 'inactive')}>Reject</Button>
                       </>
                     )}

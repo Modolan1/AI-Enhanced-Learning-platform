@@ -23,6 +23,7 @@ export const updateStudentSchema = updateProfileSchema;
 
 export const updateInstructorSchema = updateProfileSchema.extend({
   status: z.enum(INSTRUCTOR_STATUSES).optional(),
+  requestedCourseId: mongoId.optional(),
 });
 
 // ── Category ─────────────────────────────────────────────────────────────────
@@ -55,6 +56,10 @@ export const createCourseSchema = z.object({
 });
 
 export const updateCourseSchema = createCourseSchema.partial();
+
+export const assignCourseInstructorSchema = z.object({
+  instructorId: mongoId,
+});
 
 export const moderateCourseReviewSchema = z.object({
   action: z.enum(['hide', 'report', 'show']),

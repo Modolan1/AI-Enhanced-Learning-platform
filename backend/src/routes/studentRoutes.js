@@ -14,6 +14,7 @@ import {
   payForCourseSchema,
   confirmCoursePaymentSchema,
   submitCourseReviewSchema,
+  refreshRecommendationSchema,
 } from '../schemas/studentSchemas.js';
 import { env } from '../config/env.js';
 import {
@@ -73,7 +74,7 @@ router.get('/quizzes', getQuizzes);
 router.post('/quizzes/:id/submit', validateObjectId, validate(submitQuizSchema), submitQuiz);
 router.get('/attempts', getAttempts);
 router.get('/recommendations', getRecommendations);
-router.post('/recommendations/refresh', refreshRecommendations);
+router.post('/recommendations/refresh', validate(refreshRecommendationSchema), refreshRecommendations);
 router.get('/instructor-content', getInstructorLearningContent);
 
 export default router;

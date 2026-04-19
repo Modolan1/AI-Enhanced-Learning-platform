@@ -28,6 +28,7 @@ export const env = {
   openaiApiKey: process.env.OPENAI_API_KEY || '',
   openaiModel: process.env.OPENAI_MODEL || 'gpt-4o-mini',
   stripeSecretKey: process.env.STRIPE_SECRET_KEY || '',
+  googleClientId: process.env.GOOGLE_CLIENT_ID || '',
   documentUploadMaxBytes: toPositiveInt(process.env.DOCUMENT_UPLOAD_MAX_BYTES, 5 * 1024 * 1024),
   bcryptSaltRounds: toPositiveInt(process.env.BCRYPT_SALT_ROUNDS, 12),
   passwordPepper: process.env.PASSWORD_PEPPER || '',

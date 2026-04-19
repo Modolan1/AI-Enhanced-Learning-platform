@@ -8,6 +8,7 @@ import {
   updateProfileSchema, updateStudentSchema, updateInstructorSchema,
   createCategorySchema, updateCategorySchema,
   createCourseSchema, updateCourseSchema,
+  assignCourseInstructorSchema,
   moderateCourseReviewSchema,
   createQuizSchema, updateQuizSchema,
   createFlashcardSchema, updateFlashcardSchema,
@@ -15,7 +16,7 @@ import {
 import {
   getDashboard, getProfile, updateProfile, getStudents, getInstructors, getAdmins, getStudentById, updateStudent, deleteStudent, updateInstructor, deleteInstructor,
   getCategories, createCategory, updateCategory, deleteCategory, getCategoryAnalytics,
-  getCourses, createCourse, updateCourse, deleteCourse, uploadCourseThumbnail,
+  getCourses, createCourse, updateCourse, assignCourseInstructor, deleteCourse, uploadCourseThumbnail,
   uploadCourseModuleAsset, moderateCourseReview, deleteCourseReview,
   getQuizzes, createQuiz, updateQuiz, deleteQuiz,
   getFlashcards, createFlashcard, updateFlashcard, deleteFlashcard,
@@ -45,6 +46,9 @@ router.post('/courses/upload/thumbnail', uploadThumbnail.single('thumbnail'), up
 router.post('/courses/upload/module-asset', uploadModuleAsset.single('file'), uploadCourseModuleAsset);
 router.post('/courses', validate(createCourseSchema), createCourse);
 router.put('/courses/:id', validateObjectId, validate(updateCourseSchema), updateCourse);
+router.patch('/courses/:id/assign-instructor', validateObjectId, validate(assignCourseInstructorSchema), assignCourseInstructor);
+router.put('/courses/:id/assign-instructor', validateObjectId, validate(assignCourseInstructorSchema), assignCourseInstructor);
+router.post('/courses/:id/assign-instructor', validateObjectId, validate(assignCourseInstructorSchema), assignCourseInstructor);
 router.patch('/courses/:id/reviews/:reviewId/moderate', validateObjectId, validate(moderateCourseReviewSchema), moderateCourseReview);
 router.delete('/courses/:id/reviews/:reviewId', validateObjectId, deleteCourseReview);
 router.delete('/courses/:id', validateObjectId, deleteCourse);

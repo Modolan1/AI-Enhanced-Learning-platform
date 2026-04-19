@@ -69,7 +69,8 @@ export default function AppRouter() {
       <Route path="/student/courses/:id" element={<ProtectedRoute roles={['student']}><CourseDetailPage /></ProtectedRoute>} />
       <Route path="/student/courses/:id/learn" element={<ProtectedRoute roles={['student']}><MyCourseOverviewPage /></ProtectedRoute>} />
       <Route path="/student/courses/:id/lessons/:lessonIndex" element={<ProtectedRoute roles={['student']}><LessonPage /></ProtectedRoute>} />
-      <Route path="/student/flashcards" element={<ProtectedRoute roles={['student']}><FlashcardsPage /></ProtectedRoute>} />
+      <Route path="/student/memory-cards" element={<ProtectedRoute roles={['student']}><FlashcardsPage /></ProtectedRoute>} />
+      <Route path="/student/flashcards" element={<Navigate to="/student/memory-cards" replace />} />
       <Route path="/student/quizzes" element={<ProtectedRoute roles={['student']}><QuizzesPage /></ProtectedRoute>} />
       <Route path="/student/documents" element={<ProtectedRoute roles={['student']}><DocumentsPage /></ProtectedRoute>} />
       <Route path="/student/updates" element={<ProtectedRoute roles={['student']}><UpdatesPage /></ProtectedRoute>} />

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { authService } from '../../services/authService';
 import Input from '../../components/common/Input';
@@ -34,11 +34,14 @@ export default function InstructorRegisterPage() {
     preferredLearningStyle: onboarding.preferredLearningStyle || 'Project-based',
     learningGoal: onboarding.learningGoal || 'Teach students and contribute instructor content',
     weeklyLearningGoalHours: Number(onboarding.weeklyLearningGoalHours || 5),
-  }), [onboarding.learningGoal, onboarding.preferredLearningStyle, onboarding.preferredSubject, onboarding.skillLevel, onboarding.weeklyLearningGoalHours]);
+    requestedCourseId: onboarding.requestedCourseId || '',
+  }), [onboarding.learningGoal, onboarding.preferredLearningStyle, onboarding.preferredSubject, onboarding.requestedCourseId, onboarding.skillLevel, onboarding.weeklyLearningGoalHours]);
 
   const [form, setForm] = useState({
     ...initialForm,
   });
+  const [courses, setCourses] = useState([]);
+  const [coursesLoading, setCoursesLoading] = useState(false);
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   const [passwordTouched, setPasswordTouched] = useState(false);
@@ -46,12 +49,32 @@ export default function InstructorRegisterPage() {
   const passwordChecks = getPasswordChecks(form.password);
   const allChecksMet = passwordChecks.every((check) => check.met);
 
+  useEffect(() => {
+    const loadCourses = async () => {
+      try {
+        setCoursesLoading(true);
+        const response = await authService.getPublishedCourses();
+        setCourses(response?.data || []);
+      } catch (requestError) {
+        setError(requestError?.response?.data?.message || 'Unable to load courses for instructor assignment.');
+      } finally {
+        setCoursesLoading(false);
+      }
+    };
+
+    loadCourses();
+  }, []);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setPasswordTouched(true);
     setError('');
     setSuccessMessage('');
     if (!allChecksMet) return;
+    if (!form.requestedCourseId) {
+      setError('Please select the course you want to teach.');
+      return;
+    }
 
     try {
       const result = await authService.registerInstructorApplication(form);
@@ -73,6 +96,21 @@ export default function InstructorRegisterPage() {
           </div>
           <Input label="Email" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
           <Input label="Primary Subject" value={form.preferredSubject} onChange={(e) => setForm({ ...form, preferredSubject: e.target.value })} />
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Preferred Course To Teach</label>
+            <select
+              value={form.requestedCourseId}
+              onChange={(e) => setForm({ ...form, requestedCourseId: e.target.value })}
+              className="w-full rounded-xl border border-slate-200 p-3 text-sm"
+              disabled={coursesLoading}
+            >
+              <option value="">{coursesLoading ? 'Loading courses...' : 'Select course'}</option>
+              {courses.map((course) => (
+                <option key={course._id} value={course._id}>{course.title}</option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-slate-500">Admin approval will automatically assign this course to your instructor account.</p>
+          </div>
           <div>
             <Input
               label="Password"
@@ -96,7 +134,7 @@ export default function InstructorRegisterPage() {
           </div>
           {error && <div className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600">{error}</div>}
           {successMessage && <div className="rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{successMessage}</div>}
-          <Button className="w-full" type="submit" disabled={passwordTouched && !allChecksMet}>Submit Instructor Application</Button>
+          <Button className="w-full" type="submit" disabled={(passwordTouched && !allChecksMet) || coursesLoading}>Submit Instructor Application</Button>
         </form>
         <p className="mt-4 text-center text-sm text-slate-600">Already approved? <Link to="/instructor/login" className="font-medium text-indigo-600">Login</Link></p>
         <p className="mt-2 text-center text-sm text-slate-500"><Link to="/" className="text-indigo-600">Back to home</Link></p>

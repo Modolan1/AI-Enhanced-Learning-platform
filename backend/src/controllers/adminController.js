@@ -80,6 +80,11 @@ export const updateCourse = asyncHandler(async (req, res) => {
   res.json({ success: true, data: await adminService.updateCourse(req.params.id, req.body) });
 });
 
+export const assignCourseInstructor = asyncHandler(async (req, res) => {
+  const data = await adminService.assignCourseInstructor(req.params.id, req.body.instructorId);
+  res.json({ success: true, data });
+});
+
 export const deleteCourse = asyncHandler(async (req, res) => {
   await adminService.deleteCourse(req.params.id);
   res.json({ success: true, message: 'Course deleted' });

@@ -4,6 +4,11 @@ import { courseRepository } from '../repositories/courseRepository.js';
 import { generateToken } from '../utils/generateToken.js';
 import { hashPassword, verifyPassword } from '../utils/hashPassword.js';
 import { validatePassword } from '../utils/validatePassword.js';
+import { aiRecommendationService } from './aiRecommendationService.js';
+import { OAuth2Client } from 'google-auth-library';
+import { env } from '../config/env.js';
+
+const googleClient = new OAuth2Client(env.googleClientId);
 
 const MAX_FAILED_LOGIN_ATTEMPTS = 5;
 const LOGIN_LOCKOUT_MS = 30 * 60 * 1000;
@@ -27,6 +32,7 @@ export const authService = {
       passwordHash,
       role: isInstructor ? 'instructor' : 'student',
       status: isInstructor ? 'pending' : 'active',
+      requestedCourse: isInstructor ? (data.requestedCourseId || null) : null,
       learningGoal: data.learningGoal || '',
       skillLevel: data.skillLevel || 'Beginner',
       preferredSubject: data.preferredSubject || '',
@@ -45,8 +51,25 @@ export const authService = {
           email: user.email,
           role: user.role,
           status: user.status,
+          requestedCourseId: user.requestedCourse || null,
         },
       };
+    }
+
+    try {
+      await aiRecommendationService.generateAndSave(user, {
+        avgQuizScore: 0,
+        quizAttempts: 0,
+        totalQuizAttempts: 0,
+        completedCourses: 0,
+        inProgressCourses: 0,
+        flashcardReviews: 0,
+        totalFlashcardsAvailable: 0,
+      }, {
+        trigger: 'student_register',
+      });
+    } catch (error) {
+      console.warn('Registration recommendation generation skipped:', error.message);
     }
 
     return {
@@ -208,5 +231,67 @@ export const authService = {
     const newHash = await hashPassword(newPassword);
     const updated = await userRepository.updateById(userId, { passwordHash: newHash });
     return { success: true, message: 'Password updated successfully' };
+  },
+
+  async googleAuth(idToken) {
+    // Verify the Google ID token
+    let ticket;
+    try {
+      ticket = await googleClient.verifyIdToken({
+        idToken,
+        audience: env.googleClientId,
+      });
+    } catch {
+      throw new Error('Invalid Google token');
+    }
+
+    const payload = ticket.getPayload();
+    const { sub: googleId, email, given_name: firstName, family_name: lastName, picture } = payload;
+
+    if (!email) throw new Error('Google account has no email address');
+
+    // Find existing user by googleId or email
+    let user = await userRepository.findOne({ googleId });
+    if (!user) user = await userRepository.findByEmail(email);
+
+    if (user) {
+      // Link googleId if not already linked
+      if (!user.googleId) {
+        await userRepository.updateById(user._id, { googleId });
+        user.googleId = googleId;
+      }
+      if (user.status !== 'active') {
+        throw new Error('Your account is not active. Please contact support.');
+      }
+    } else {
+      // Auto-register as student
+      user = await userRepository.create({
+        firstName: firstName || 'User',
+        lastName: lastName || '',
+        email,
+        passwordHash: null,
+        googleId,
+        role: 'student',
+        status: 'active',
+      });
+      try {
+        await aiRecommendationService.generateAndSave(user, {
+          avgQuizScore: 0, quizAttempts: 0, totalQuizAttempts: 0, completedCourses: 0,
+        });
+      } catch { /* non-critical */ }
+    }
+
+    const token = generateToken({ userId: user._id, role: user.role });
+    return {
+      token,
+      user: {
+        id: user._id,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+        role: user.role,
+        status: user.status,
+      },
+    };
   },
 };

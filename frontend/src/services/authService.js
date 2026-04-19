@@ -6,4 +6,5 @@ export const authService = {
   registerInstructorApplication: async (payload) => (await API.post('/auth/register', { ...payload, role: 'instructor' })).data,
   createAdmin: async (payload) => (await API.post('/auth/admin/create', payload)).data,
   updatePassword: async (payload) => (await API.post('/auth/update-password', payload)).data,
+  googleAuth: async (idToken) => (await API.post('/auth/google', { idToken })).data,
 };

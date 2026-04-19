@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { BrainCircuit } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import Input from '../../components/common/Input';
@@ -19,6 +19,7 @@ const PASSWORD_MIN = 8;
 const PASSWORD_MAX = 128;
 const UPPERCASE_RE = /[A-Z]/;
 const SPECIAL_RE = /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?`~]/;
+const INITIAL_VISIBLE_COURSES = 6;
 
 const onboardingSteps = [
   {
@@ -103,6 +104,18 @@ function buildRecommendation(answers) {
   };
 }
 
+function buildCourseOutcomeLine(course) {
+  const modules = Array.isArray(course?.modules) ? course.modules : [];
+  const projectCount = modules.filter((item) => item?.type === 'project').length;
+  const lessonCount = modules.length;
+  const levelText = (course?.level || 'Beginner').toLowerCase();
+
+  const projectPhrase = `${projectCount || 1} ${projectCount === 1 ? 'project' : 'projects'}`;
+  const lessonPhrase = `${lessonCount || 0} ${lessonCount === 1 ? 'lesson' : 'lessons'}`;
+
+  return `Build ${projectPhrase} • ${lessonPhrase} • ${levelText} friendly`;
+}
+
 function Modal({ title, onClose, children, maxWidthClass = 'max-w-2xl' }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4">
@@ -130,10 +143,18 @@ export default function HomeEntryPage() {
   const [showQuestionnaire, setShowQuestionnaire] = useState(false);
   const [showRegister, setShowRegister] = useState(false);
   const [showCourseEnrollment, setShowCourseEnrollment] = useState(false);
+  const [showCourseDetails, setShowCourseDetails] = useState(false);
+  const [registrationSuccess, setRegistrationSuccess] = useState(null); // { user, dashboardPath }
+  const [redirectCountdown, setRedirectCountdown] = useState(4);
+  const countdownRef = useRef(null);
+  const coursesSectionRef = useRef(null);
+  const coursesGridRef = useRef(null);
 
   const [courses, setCourses] = useState([]);
   const [selectedCourseForEnrollment, setSelectedCourseForEnrollment] = useState(null);
+  const [selectedCourseForDetails, setSelectedCourseForDetails] = useState(null);
   const [coursesLoading, setCoursesLoading] = useState(false);
+  const [showAllCourses, setShowAllCourses] = useState(false);
 
   const [loginForm, setLoginForm] = useState({ email: '', password: '' });
   const [loginError, setLoginError] = useState('');
@@ -279,6 +300,29 @@ export default function HomeEntryPage() {
     setShowCourseEnrollment(true);
   };
 
+  const handleOpenCourseDetails = (course) => {
+    setSelectedCourseForDetails(course);
+    setShowCourseDetails(true);
+  };
+
+  const handleEnrollFromDetails = () => {
+    if (!selectedCourseForDetails) return;
+    setShowCourseDetails(false);
+    handleSelectCourseForEnrollment(selectedCourseForDetails);
+  };
+
+  const toggleCourseVisibility = () => {
+    if (showAllCourses) {
+      setShowAllCourses(false);
+      window.setTimeout(() => {
+        coursesSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 180);
+      return;
+    }
+
+    setShowAllCourses(true);
+  };
+
   const completeCourseQuestionnaire = () => {
     setShowCourseEnrollment(false);
     setShowRegister(true);
@@ -345,18 +389,33 @@ export default function HomeEntryPage() {
         setRegisterError('Registration completed, but login session was not created. Please log in.');
         return;
       }
-      setShowRegister(false);
-      navigate(
+      const dashboardPath =
         user.role === 'admin'
           ? '/admin/dashboard'
           : user.role === 'instructor'
             ? '/instructor/dashboard'
-            : '/student/dashboard'
-      );
+            : '/student/dashboard';
+      setShowRegister(false);
+      setRedirectCountdown(4);
+      setRegistrationSuccess({ user, dashboardPath });
+      countdownRef.current = setInterval(() => {
+        setRedirectCountdown((prev) => {
+          if (prev <= 1) {
+            clearInterval(countdownRef.current);
+            setRegistrationSuccess(null);
+            navigate(dashboardPath);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
     } catch (error) {
       setRegisterError(error?.response?.data?.message || 'Registration failed');
     }
   };
+
+  // Cleanup countdown on unmount
+  useEffect(() => () => { if (countdownRef.current) clearInterval(countdownRef.current); }, []);
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,_#dbeafe,_#f8fafc_45%,_#e2e8f0)] text-slate-900">
@@ -433,7 +492,7 @@ export default function HomeEntryPage() {
             src={heroStudentOnline}
             alt=""
             aria-hidden="true"
-            className="pointer-events-none absolute inset-y-0 right-[-18%] z-0 hidden h-full max-h-[620px] w-auto opacity-55 md:block"
+            className="pointer-events-none absolute inset-y-0 right-[-12%] z-0 hidden h-full max-h-[680px] w-auto opacity-70 md:block"
           />
           <div className="relative z-10">
             <div className="inline-block rounded-full bg-indigo-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-indigo-700">
@@ -450,7 +509,7 @@ export default function HomeEntryPage() {
               <Button variant="secondary" onClick={() => setShowLogin(true)}>Login</Button>
             </div>
           </div>
-          <div className="relative z-10 rounded-3xl border border-white/70 bg-white/75 p-6 shadow-xl shadow-indigo-100 backdrop-blur-sm">
+          <div className="relative z-10 rounded-3xl border border-white/60 bg-white/68 p-6 shadow-xl shadow-indigo-100 backdrop-blur-sm">
             <h2 className="text-lg font-semibold">How it works</h2>
             <ol className="mt-4 space-y-3 text-sm text-slate-700">
               <li>1. Complete a quick onboarding question series.</li>
@@ -460,28 +519,29 @@ export default function HomeEntryPage() {
           </div>
         </section>
 
-        <section id="courses" className="mt-20">
+        <section id="courses" ref={coursesSectionRef} className="mt-20 scroll-mt-28">
           <h2 className="mb-8 text-3xl font-bold">Available Courses to Enroll</h2>
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          <div
+            ref={coursesGridRef}
+            className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 transition-all duration-300 ease-out"
+          >
             {coursesLoading ? (
               <p className="col-span-full text-center text-slate-500">Loading courses...</p>
             ) : courses.length === 0 ? (
               <p className="col-span-full text-center text-slate-500">No courses available yet.</p>
             ) : (
-              courses.map((course) => (
-                <div
-                  key={course._id}
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => handleSelectCourseForEnrollment(course)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter' || event.key === ' ') {
-                      event.preventDefault();
-                      handleSelectCourseForEnrollment(course);
-                    }
-                  }}
-                  className="group text-left transition hover:scale-105"
-                >
+              courses.map((course, index) => {
+                const isExtraCourse = index >= INITIAL_VISIBLE_COURSES;
+                const isVisible = showAllCourses || !isExtraCourse;
+
+                return (
+                  <div
+                    key={course._id}
+                    className={`group overflow-hidden text-left transition-all duration-300 ease-out ${
+                      isVisible ? 'max-h-[1000px] translate-y-0 opacity-100' : 'pointer-events-none max-h-0 -translate-y-1 opacity-0'
+                    }`}
+                    style={{ transitionDelay: isVisible && showAllCourses ? `${Math.min(index, 8) * 35}ms` : '0ms' }}
+                  >
                   <div className="rounded-2xl bg-white p-5 shadow-md transition group-hover:shadow-xl">
                     {course.thumbnail && (
                       <img src={getThumbnailUrl(course.thumbnail)} alt={course.title} className="h-40 w-full rounded-lg object-cover" />
@@ -489,6 +549,7 @@ export default function HomeEntryPage() {
                     <h3 className="mt-4 font-semibold text-slate-900 group-hover:text-indigo-700">{course.title}</h3>
                     <p className="mb-3 mt-2 text-xs text-slate-500">{course.category?.name}</p>
                     <p className="text-sm text-slate-600 line-clamp-2">{course.description}</p>
+                    <p className="mt-2 text-xs font-medium text-indigo-700">{buildCourseOutcomeLine(course)}</p>
                     <div className="mt-4 flex items-center justify-between">
                       <span className="text-xs text-slate-500">{course.level} • {course.durationHours}h</span>
                       <div className="flex items-center gap-1">
@@ -502,12 +563,23 @@ export default function HomeEntryPage() {
                         )}
                       </div>
                     </div>
-                    <Button className="mt-4 w-full">Enroll Now</Button>
+                    <div className="mt-4 grid grid-cols-2 gap-2">
+                      <Button variant="secondary" className="w-full" onClick={() => handleOpenCourseDetails(course)}>View Details</Button>
+                      <Button className="w-full" onClick={() => handleSelectCourseForEnrollment(course)}>Enroll Now</Button>
+                    </div>
                   </div>
-                </div>
-              ))
+                  </div>
+                );
+              })
             )}
           </div>
+          {!coursesLoading && courses.length > INITIAL_VISIBLE_COURSES && (
+            <div className="mt-8 flex justify-center">
+              <Button variant="secondary" onClick={toggleCourseVisibility}>
+                {showAllCourses ? 'See Less' : `View More (${courses.length - INITIAL_VISIBLE_COURSES} more)`}
+              </Button>
+            </div>
+          )}
         </section>
 
         <section id="about" className="mt-20">
@@ -526,7 +598,7 @@ export default function HomeEntryPage() {
           </div>
           <div className="rounded-2xl border border-slate-200 bg-white p-5">
             <h3 className="font-semibold">Document Intelligence</h3>
-            <p className="mt-2 text-sm text-slate-600">Upload documents, extract key concepts, generate flashcards and quizzes instantly.</p>
+            <p className="mt-2 text-sm text-slate-600">Upload documents, extract key concepts, generate memory cards and quizzes instantly.</p>
           </div>
           <div className="rounded-2xl border border-slate-200 bg-white p-5">
             <h3 className="font-semibold">Actionable Progress</h3>
@@ -621,6 +693,44 @@ export default function HomeEntryPage() {
           </div>
         </div>
       </footer>
+
+      {registrationSuccess && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-2xl text-center">
+            {/* Success icon */}
+            <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100">
+              <svg className="h-8 w-8 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <h2 className="text-2xl font-extrabold text-slate-900">Welcome aboard!</h2>
+            <p className="mt-2 text-slate-500">
+              Hi <span className="font-semibold text-slate-800">{registrationSuccess.user.firstName || registrationSuccess.user.email}</span>, your account has been created successfully.
+            </p>
+            <p className="mt-4 text-sm text-slate-500">
+              You'll be taken to your dashboard in <span className="font-bold text-indigo-600">{redirectCountdown}</span> second{redirectCountdown !== 1 ? 's' : ''}…
+            </p>
+            {/* Progress bar */}
+            <div className="mt-4 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+              <div
+                className="h-full rounded-full bg-indigo-500 transition-all duration-1000"
+                style={{ width: `${((4 - redirectCountdown) / 4) * 100}%` }}
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                clearInterval(countdownRef.current);
+                setRegistrationSuccess(null);
+                navigate(registrationSuccess.dashboardPath);
+              }}
+              className="mt-6 w-full rounded-xl bg-indigo-600 py-3 text-sm font-bold text-white transition hover:bg-indigo-700"
+            >
+              Go to Dashboard Now
+            </button>
+          </div>
+        </div>
+      )}
 
       {showLogin && (
         <Modal title="Login" onClose={() => { setShowLogin(false); setLoginError(''); }} maxWidthClass="max-w-md">
@@ -752,6 +862,69 @@ export default function HomeEntryPage() {
             ) : (
               <Button onClick={completeCourseQuestionnaire} disabled={!currentValue}>Continue to Registration</Button>
             )}
+          </div>
+        </Modal>
+      )}
+
+      {showCourseDetails && selectedCourseForDetails && (
+        <Modal title={selectedCourseForDetails.title} onClose={() => setShowCourseDetails(false)}>
+          <div className="space-y-4">
+            {selectedCourseForDetails.thumbnail ? (
+              <img
+                src={getThumbnailUrl(selectedCourseForDetails.thumbnail)}
+                alt={selectedCourseForDetails.title}
+                className="h-52 w-full rounded-xl object-cover"
+              />
+            ) : null}
+
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <span className="rounded-full bg-indigo-100 px-3 py-1 font-semibold text-indigo-700">{selectedCourseForDetails.category?.name || 'General'}</span>
+              <span className="rounded-full bg-slate-100 px-3 py-1 font-medium text-slate-600">{selectedCourseForDetails.level}</span>
+              <span className="rounded-full bg-slate-100 px-3 py-1 font-medium text-slate-600">{selectedCourseForDetails.durationHours || 0}h total</span>
+              <span className="rounded-full bg-slate-100 px-3 py-1 font-medium text-slate-600">{selectedCourseForDetails.modules?.length || 0} modules</span>
+            </div>
+
+            <p className="text-sm leading-6 text-slate-700">
+              {selectedCourseForDetails.description || 'This course is designed to help you build practical skills through guided lessons and structured modules.'}
+            </p>
+
+            {selectedCourseForDetails.overviewNotes ? (
+              <div className="rounded-xl border border-indigo-100 bg-indigo-50 p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-indigo-700">Why this course works</p>
+                <p className="mt-1 text-sm text-slate-700">{selectedCourseForDetails.overviewNotes}</p>
+              </div>
+            ) : null}
+
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">What you will learn</p>
+              <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-700">
+                {(selectedCourseForDetails.modules || []).slice(0, 5).map((module) => (
+                  <li key={module.title}>{module.title}</li>
+                ))}
+                {(!selectedCourseForDetails.modules || selectedCourseForDetails.modules.length === 0) && (
+                  <li>Foundational concepts, guided practice, and real-world application.</li>
+                )}
+              </ul>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-100 bg-amber-50 px-4 py-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">Learner trust</p>
+                {Number(selectedCourseForDetails.rating || 0) > 0 ? (
+                  <p className="mt-1 text-sm font-medium text-slate-800">
+                    Rated {Number(selectedCourseForDetails.rating || 0).toFixed(1)} / 5 by {selectedCourseForDetails.reviewCount || 0} learner{selectedCourseForDetails.reviewCount === 1 ? '' : 's'}
+                  </p>
+                ) : (
+                  <p className="mt-1 text-sm font-medium text-slate-700">New course, early learners can get ahead quickly.</p>
+                )}
+              </div>
+              <p className="text-lg font-extrabold text-slate-900">${Number(selectedCourseForDetails.price || 0).toFixed(2)}</p>
+            </div>
+
+            <div className="flex flex-wrap justify-end gap-2 pt-1">
+              <Button variant="secondary" onClick={() => setShowCourseDetails(false)}>Close</Button>
+              <Button onClick={handleEnrollFromDetails}>Enroll in This Course</Button>
+            </div>
           </div>
         </Modal>
       )}

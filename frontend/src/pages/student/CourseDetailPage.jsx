@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from 'react';
+﻿import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import StudentLayout from '../../layouts/StudentLayout';
 import { studentService } from '../../services/studentService';
@@ -67,6 +67,12 @@ export default function CourseDetailPage() {
   const [expandCurriculum, setExpandCurriculum] = useState(false);
   const [reviewForm, setReviewForm] = useState({ rating: 5, comment: '' });
   const [submittingReview, setSubmittingReview] = useState(false);
+  const [paymentSuccessModal, setPaymentSuccessModal] = useState(null); // { courseName, learnPath }
+  const [payCountdown, setPayCountdown] = useState(5);
+  const payCountdownRef = useRef(null);
+
+  // Cleanup payment countdown on unmount
+  useEffect(() => () => { if (payCountdownRef.current) clearInterval(payCountdownRef.current); }, []);
 
   const clearPaymentQueryParam = () => {
     const params = new URLSearchParams(location.search);
@@ -86,7 +92,21 @@ export default function CourseDetailPage() {
   const syncCourseAccess = async () => {
     const refreshed = await studentService.getCourseDetail(id);
     if (refreshed.data.access?.isPaid) {
-      navigate(`/student/courses/${id}/learn`, { replace: true });
+      const learnPath = `/student/courses/${id}/learn`;
+      const courseName = refreshed.data.course?.title || 'this course';
+      setPayCountdown(5);
+      setPaymentSuccessModal({ courseName, learnPath });
+      payCountdownRef.current = setInterval(() => {
+        setPayCountdown((prev) => {
+          if (prev <= 1) {
+            clearInterval(payCountdownRef.current);
+            setPaymentSuccessModal(null);
+            navigate(learnPath, { replace: true });
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
       return;
     }
     setData(refreshed.data);
@@ -613,7 +633,7 @@ export default function CourseDetailPage() {
                     },
                     {
                       icon: 'M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4',
-                      text: 'Flashcards & quizzes included',
+                      text: 'Memory cards & quizzes included',
                     },
                   ].map(({ icon, text }) => (
                     <li key={text} className="flex items-center gap-2">
@@ -630,6 +650,49 @@ export default function CourseDetailPage() {
 
         </div>
       </div>
+
+      {/* Payment Success Modal */}
+      {paymentSuccessModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-2xl text-center">
+            {/* Success icon */}
+            <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100">
+              <svg className="h-8 w-8 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <h2 className="text-2xl font-extrabold text-slate-900">Payment Successful!</h2>
+            <p className="mt-2 text-slate-500">
+              You now have full access to{' '}
+              <span className="font-semibold text-slate-800">{paymentSuccessModal.courseName}</span>.
+            </p>
+            <p className="mt-4 text-sm text-slate-500">
+              Taking you to the course in{' '}
+              <span className="font-bold text-indigo-600">{payCountdown}</span>{' '}
+              second{payCountdown !== 1 ? 's' : ''}…
+            </p>
+            {/* Progress bar */}
+            <div className="mt-4 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+              <div
+                className="h-full rounded-full bg-indigo-500 transition-all duration-1000"
+                style={{ width: `${((5 - payCountdown) / 5) * 100}%` }}
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                clearInterval(payCountdownRef.current);
+                const path = paymentSuccessModal.learnPath;
+                setPaymentSuccessModal(null);
+                navigate(path, { replace: true });
+              }}
+              className="mt-6 w-full rounded-xl bg-indigo-600 py-3 text-sm font-bold text-white transition hover:bg-indigo-700"
+            >
+              Start Learning Now
+            </button>
+          </div>
+        </div>
+      )}
     </StudentLayout>
   );
 }

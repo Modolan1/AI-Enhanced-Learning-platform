@@ -14,7 +14,7 @@ export default function AdminDashboardPage() {
         <Card><p className="text-sm text-slate-500">Students</p><h3 className="mt-2 text-3xl font-bold">{data.stats.students}</h3></Card>
         <Card><p className="text-sm text-slate-500">Courses</p><h3 className="mt-2 text-3xl font-bold">{data.stats.courses}</h3></Card>
         <Card><p className="text-sm text-slate-500">Quizzes</p><h3 className="mt-2 text-3xl font-bold">{data.stats.quizzes}</h3></Card>
-        <Card><p className="text-sm text-slate-500">Flashcards</p><h3 className="mt-2 text-3xl font-bold">{data.stats.flashcards}</h3></Card>
+        <Card><p className="text-sm text-slate-500">Memory Cards</p><h3 className="mt-2 text-3xl font-bold">{data.stats.flashcards}</h3></Card>
         <Card><p className="text-sm text-slate-500">Categories</p><h3 className="mt-2 text-3xl font-bold">{data.stats.categories}</h3></Card>
       </div>
       <div className="mt-6 grid gap-6 lg:grid-cols-2">

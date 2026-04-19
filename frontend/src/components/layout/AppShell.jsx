@@ -13,9 +13,11 @@ export default function AppShell({ children, navItems, title }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [studentUpdates, setStudentUpdates] = useState([]);
   const [notificationCount, setNotificationCount] = useState(0);
   const notificationMenuRef = useRef(null);
+  const profileMenuRef = useRef(null);
 
   const isStudent = user?.role === 'student';
 
@@ -63,6 +65,27 @@ export default function AppShell({ children, navItems, title }) {
       document.removeEventListener('keydown', handleEscape);
     };
   }, [isNotificationOpen]);
+
+  useEffect(() => {
+    if (!isProfileOpen) return;
+
+    const handleDocumentClick = (event) => {
+      if (!profileMenuRef.current?.contains(event.target)) {
+        setIsProfileOpen(false);
+      }
+    };
+
+    const handleEscape = (event) => {
+      if (event.key === 'Escape') setIsProfileOpen(false);
+    };
+
+    document.addEventListener('mousedown', handleDocumentClick);
+    document.addEventListener('keydown', handleEscape);
+    return () => {
+      document.removeEventListener('mousedown', handleDocumentClick);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [isProfileOpen]);
 
   const handleNotificationToggle = () => {
     const next = !isNotificationOpen;
@@ -157,7 +180,42 @@ export default function AppShell({ children, navItems, title }) {
             >
               <LogOut size={16} /> Logout
             </button>
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-teal-100 to-cyan-100 font-bold text-teal-700">{user?.firstName?.[0] || 'U'}</div>
+            <div className="relative" ref={profileMenuRef}>
+              <button
+                type="button"
+                onClick={() => setIsProfileOpen((prev) => !prev)}
+                className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-teal-100 to-cyan-100 font-bold text-teal-700 transition hover:ring-2 hover:ring-teal-400"
+                aria-label="User profile"
+              >
+                {user?.firstName?.[0] || 'U'}
+              </button>
+
+              {isProfileOpen && (
+                <div className="absolute right-0 z-[100] mt-2 w-64 rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-xl backdrop-blur">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-teal-400 to-cyan-400 text-xl font-bold text-white">
+                      {user?.firstName?.[0] || 'U'}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-slate-900">{user?.firstName} {user?.lastName}</p>
+                      <p className="truncate text-xs text-slate-500">{user?.email}</p>
+                      <span className="mt-1 inline-block rounded-full bg-teal-100 px-2 py-0.5 text-[11px] font-semibold capitalize text-teal-700">{user?.role}</span>
+                    </div>
+                  </div>
+                  <hr className="my-3 border-slate-100" />
+                  <div className="space-y-1 text-xs text-slate-500">
+                    {user?.username && <p><span className="font-medium text-slate-700">Username:</span> {user.username}</p>}
+                    {user?.studentId && <p><span className="font-medium text-slate-700">Student ID:</span> {user.studentId}</p>}
+                  </div>
+                  <button
+                    onClick={() => { setIsProfileOpen(false); logout(); navigate('/'); }}
+                    className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-600 transition hover:bg-rose-100"
+                  >
+                    <LogOut size={14} /> Sign out
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </header>
         {children}

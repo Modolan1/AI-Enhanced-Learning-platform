@@ -113,6 +113,7 @@ const filterByEnrolledCourse = (items = [], enrolledCourseIds, getCourseId) => i
 });
 
 const getVisibleReviews = (reviews = []) => reviews.filter((item) => !item?.isHidden && item?.moderationStatus !== 'hidden' && item?.moderationStatus !== 'reported');
+const NON_ENROLLED_DOCUMENT_UPLOAD_LIMIT = 3;
 
 const computeVisibleReviewSummary = (reviews = []) => {
   const visibleReviews = getVisibleReviews(reviews);
@@ -121,6 +122,67 @@ const computeVisibleReviewSummary = (reviews = []) => {
     ? Number((visibleReviews.reduce((sum, item) => sum + Number(item?.rating || 0), 0) / reviewCount).toFixed(1))
     : 0;
   return { rating, reviewCount, visibleReviews };
+};
+
+const buildRecommendationSummary = ({ student, attempts, progress, activities, flashcards, context = {} }) => {
+  const avgQuizScore = attempts.length ? Math.round(attempts.reduce((sum, a) => sum + Number(a.percentage || 0), 0) / attempts.length) : 0;
+  const completedCourses = progress.filter((item) => Number(item.completionPercent || 0) >= 100).length;
+  const inProgressCourses = progress.filter((item) => Number(item.completionPercent || 0) > 0 && Number(item.completionPercent || 0) < 100).length;
+  const weakTopics = [];
+
+  const latestProgress = context.courseId
+    ? progress.find((item) => String(item?.course?._id || item?.course) === String(context.courseId))
+    : progress[0];
+
+  return {
+    avgQuizScore,
+    quizAttempts: attempts.length,
+    totalQuizAttempts: attempts.length,
+    completedCourses,
+    inProgressCourses,
+    flashcardReviews: activities.filter((item) => item.activityType === 'flashcard_review').length,
+    totalFlashcardsAvailable: flashcards.length,
+    preferredSubject: student.preferredSubject,
+    preferredLearningStyle: student.preferredLearningStyle,
+    learningGoal: student.learningGoal,
+    recommendedNextLesson: context.lessonTitle || '',
+    recommendedNextCourse: context.nextCourseTitle || '',
+    weakTopics,
+    lastCompletedCourse: context.courseCompleted
+      ? {
+        title: context.courseTitle || latestProgress?.course?.title || 'recent course',
+        score: avgQuizScore,
+      }
+      : null,
+  };
+};
+
+const safeGenerateRecommendation = async (studentId, context = {}) => {
+  try {
+    const student = await userRepository.findStudentById(studentId);
+    if (!student) return null;
+
+    const [attempts, progress, activities, flashcards] = await Promise.all([
+      quizAttemptRepository.findByStudent(studentId),
+      progressRepository.findByStudent(studentId),
+      activityRepository.findByStudent(studentId),
+      flashcardRepository.findAll(),
+    ]);
+
+    const summary = buildRecommendationSummary({
+      student,
+      attempts,
+      progress,
+      activities,
+      flashcards,
+      context,
+    });
+
+    return await aiRecommendationService.generateAndSave(student, summary, context);
+  } catch (error) {
+    console.warn('Recommendation auto-refresh skipped:', error.message);
+    return null;
+  }
 };
 
 export const studentService = {
@@ -184,6 +246,8 @@ export const studentService = {
       ? Math.round(attempts.reduce((sum, item) => sum + item.percentage, 0) / attempts.length)
       : 0;
 
+    const realRecentActivity = (recentActivity || []).filter((item) => item.activityType !== 'course_view');
+
     return {
       student,
       stats: {
@@ -203,7 +267,7 @@ export const studentService = {
       progress,
       attempts: attempts.slice(0, 5),
       recommendations: recommendations.slice(0, 3),
-      recentActivity,
+      recentActivity: realRecentActivity,
       topCategories: paidCourses.reduce((acc, course) => {
         const name = course.category?.name || 'General';
         acc[name] = (acc[name] || 0) + 1;
@@ -214,15 +278,6 @@ export const studentService = {
 
   async listCourses(studentId) {
     const courses = await courseRepository.findAllPublished();
-    await Promise.all(courses.slice(0, 1).map((course) =>
-      activityRepository.create({
-        student: studentId,
-        activityType: 'course_view',
-        resourceType: 'course',
-        resourceId: course._id,
-        metadata: { title: course.title },
-      })
-    ));
     return courses;
   },
 
@@ -426,6 +481,9 @@ export const studentService = {
     const course = await courseRepository.findById(courseId);
     if (!course) throw new Error('Course not found');
 
+    const existingEnrollments = await progressRepository.findByStudent(studentId);
+    const isFirstEnrollment = existingEnrollments.length === 0;
+
     const existingProgress = await progressRepository.findByStudentAndCourse(studentId, courseId);
     if (existingProgress) {
       return existingProgress;
@@ -452,6 +510,14 @@ export const studentService = {
       resourceId: courseId,
       metadata: { title: course.title },
     });
+
+    if (isFirstEnrollment) {
+      await safeGenerateRecommendation(studentId, {
+        trigger: 'first_course_enrollment',
+        courseId,
+        courseTitle: course.title,
+      });
+    }
 
     return newProgress;
   },
@@ -640,6 +706,7 @@ export const studentService = {
     const existingProgress = await progressRepository.findByStudentAndCourse(studentId, courseId);
     if (!existingProgress) throw new Error('Please enroll in the course before completing lessons');
     const currentCompleted = existingProgress?.completedModules || 0;
+    const previousCompletionPercent = Number(existingProgress?.completionPercent || 0);
     const nextCompleted = completed
       ? Math.max(currentCompleted, lessonIndex + 1)
       : Math.min(currentCompleted, lessonIndex);
@@ -663,6 +730,26 @@ export const studentService = {
         courseTitle: course.title,
       },
     });
+
+    if (completed) {
+      await safeGenerateRecommendation(studentId, {
+        trigger: 'lesson_complete',
+        courseId,
+        courseTitle: course.title,
+        lessonTitle: modules[lessonIndex].title,
+        completionPercent,
+      });
+
+      if (previousCompletionPercent < 100 && completionPercent >= 100) {
+        await safeGenerateRecommendation(studentId, {
+          trigger: 'course_complete',
+          courseId,
+          courseTitle: course.title,
+          courseCompleted: true,
+          completionPercent,
+        });
+      }
+    }
 
     return {
       progress: updatedProgress,
@@ -765,6 +852,10 @@ export const studentService = {
 
     await studentService.validateEnrolledResource(studentId, quiz.course?._id || quiz.course, 'Please enroll in this course to attempt its quizzes');
 
+    const priorAttempts = await quizAttemptRepository.findByStudent(studentId);
+    const priorAttemptCountForQuiz = priorAttempts.filter((item) => String(item?.quiz?._id || item?.quiz) === String(quizId)).length;
+    const trigger = priorAttemptCountForQuiz > 0 ? 'quiz_retake' : 'quiz_attempt';
+
     let score = 0;
     quiz.questions.forEach((q, index) => {
       if (answers[index] === q.correctAnswer) score += 1;
@@ -783,7 +874,10 @@ export const studentService = {
     });
 
     const totalModules = quiz.course?.modules?.length || 10;
-    await progressRepository.upsert(studentId, quiz.course._id, {
+    const existingProgress = await progressRepository.findByStudentAndCourse(studentId, quiz.course._id);
+    const previousCompletionPercent = Number(existingProgress?.completionPercent || 0);
+
+    const updatedProgress = await progressRepository.upsert(studentId, quiz.course._id, {
       completedModules: Math.min(totalModules, Math.max(1, Math.round((percentage / 100) * totalModules))),
       totalModules,
       completionPercent: Math.min(100, percentage),
@@ -798,11 +892,37 @@ export const studentService = {
       metadata: { percentage, title: quiz.title },
     });
 
+    await safeGenerateRecommendation(studentId, {
+      trigger,
+      courseId: quiz.course?._id || quiz.course,
+      courseTitle: quiz.course?.title,
+      completionPercent: Number(updatedProgress?.completionPercent || 0),
+    });
+
+    if (previousCompletionPercent < 100 && Number(updatedProgress?.completionPercent || 0) >= 100) {
+      await safeGenerateRecommendation(studentId, {
+        trigger: 'course_complete',
+        courseId: quiz.course?._id || quiz.course,
+        courseTitle: quiz.course?.title,
+        courseCompleted: true,
+        completionPercent: Number(updatedProgress?.completionPercent || 0),
+      });
+    }
+
     return attempt;
   },
 
   async analyzePdfDocument(studentId, file) {
     if (!file) throw new Error('PDF file is required');
+
+    const [progress, documentCount] = await Promise.all([
+      progressRepository.findByStudent(studentId),
+      documentStudyPackRepository.countByStudent(studentId),
+    ]);
+
+    if ((progress || []).length === 0 && documentCount >= NON_ENROLLED_DOCUMENT_UPLOAD_LIMIT) {
+      throw new Error(`You can upload up to ${NON_ENROLLED_DOCUMENT_UPLOAD_LIMIT} documents before enrolling in a course. Enroll in any course to upload more.`);
+    }
 
     const parser = new PDFParse({ data: file.buffer });
     let parsed;
@@ -990,30 +1110,16 @@ export const studentService = {
   listAttempts: async (studentId) => quizAttemptRepository.findByStudent(studentId),
   listRecommendations: async (studentId) => recommendationRepository.findByStudent(studentId),
 
-  async refreshRecommendations(studentId) {
-    const student = await userRepository.findStudentById(studentId);
-    if (!student) throw new Error('Student not found');
+  async refreshRecommendations(studentId, context = {}) {
+    const generated = await safeGenerateRecommendation(studentId, {
+      trigger: context.trigger || 'manual_refresh',
+    });
 
-    const [attempts, progress, activities, flashcards] = await Promise.all([
-      quizAttemptRepository.findByStudent(studentId),
-      progressRepository.findByStudent(studentId),
-      activityRepository.findByStudent(studentId),
-      flashcardRepository.findAll(),
-    ]);
+    if (!generated) {
+      throw new Error('Unable to refresh recommendation at the moment');
+    }
 
-    const summary = {
-      avgQuizScore: attempts.length ? Math.round(attempts.reduce((sum, a) => sum + a.percentage, 0) / attempts.length) : 0,
-      totalQuizAttempts: attempts.length,
-      completedCourses: progress.filter((item) => item.completionPercent >= 100).length,
-      inProgressCourses: progress.filter((item) => item.completionPercent > 0 && item.completionPercent < 100).length,
-      flashcardReviews: activities.filter((item) => item.activityType === 'flashcard_review').length,
-      totalFlashcardsAvailable: flashcards.length,
-      preferredSubject: student.preferredSubject,
-      preferredLearningStyle: student.preferredLearningStyle,
-      learningGoal: student.learningGoal,
-    };
-
-    return aiRecommendationService.generateAndSave(student, summary);
+    return generated;
   },
 
   async getInstructorContent(studentId, filter = {}) {

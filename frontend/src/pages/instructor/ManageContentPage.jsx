@@ -19,9 +19,11 @@ export default function ManageContentPage() {
   const [courses, setCourses] = useState([]);
   const [categories, setCategories] = useState([]);
   const [editingId, setEditingId] = useState('');
+  const [selectedCourseId, setSelectedCourseId] = useState('');
   const [thumbnailPreview, setThumbnailPreview] = useState(null);
   const [isUploadingThumbnail, setIsUploadingThumbnail] = useState(false);
   const [uploadingModuleAssetKey, setUploadingModuleAssetKey] = useState('');
+  const [persistedModuleCount, setPersistedModuleCount] = useState(0);
   const [form, setForm] = useState({
     title: '', description: '', category: '', level: 'Beginner', durationHours: 1, thumbnail: '',
     overviewNotes: '',
@@ -35,17 +37,30 @@ export default function ManageContentPage() {
         instructorService.getMyCourses(),
         instructorService.getCategories(),
       ]);
-      setCourses(courseRes.data || []);
+      const loadedCourses = courseRes.data || [];
+      setCourses(loadedCourses);
+      if (loadedCourses.length === 0) {
+        setEditingId('');
+        setSelectedCourseId('');
+        setPersistedModuleCount(0);
+      }
       setCategories(categoryRes.data || []);
       if (!form.category && categoryRes.data?.[0]) {
         setForm((prev) => ({ ...prev, category: categoryRes.data[0]._id }));
       }
+      if (!editingId && !selectedCourseId && loadedCourses.length > 0) {
+        startEdit(loadedCourses[0]);
+      }
+      return loadedCourses;
     } catch (err) {
       toast(err?.response?.data?.message || 'Failed to load instructor courses', 'error');
+      return [];
     }
   };
 
   useEffect(() => { load(); }, []);
+
+  const hasCourses = courses.length > 0;
 
   const updateModule = (index, field, value) => {
     const next = [...form.modules];
@@ -58,6 +73,24 @@ export default function ManageContentPage() {
     modules: [...form.modules, { title: '', durationMinutes: 20, type: 'reading', textContent: '', videoUrl: '', resourceUrl: '', resourceTitle: '' }],
   });
 
+  const removeModule = (index) => {
+    const next = (form.modules || []).filter((_, idx) => idx !== index);
+    setForm({
+      ...form,
+      modules: next.length
+        ? next
+        : [{ title: '', durationMinutes: 20, type: 'reading', textContent: '', videoUrl: '', resourceUrl: '', resourceTitle: '' }],
+    });
+  };
+
+  const confirmAndRemoveModule = (index) => {
+    const module = form.modules?.[index];
+    const label = module?.title?.trim() || `Lesson ${index + 1}`;
+    const confirmed = window.confirm(`Delete ${label}? This action cannot be undone until you save changes.`);
+    if (!confirmed) return;
+    removeModule(index);
+  };
+
   const updateAnnouncement = (index, field, value) => {
     const next = [...form.announcements];
     next[index] = { ...next[index], [field]: value };
@@ -66,8 +99,18 @@ export default function ManageContentPage() {
 
   const addAnnouncement = () => setForm({ ...form, announcements: [...form.announcements, { title: '', message: '' }] });
 
+  const removeAnnouncement = (index) => {
+    const next = (form.announcements || []).filter((_, idx) => idx !== index);
+    setForm({
+      ...form,
+      announcements: next.length ? next : [{ title: '', message: '' }],
+    });
+  };
+
   const resetForm = () => {
     setEditingId('');
+    setSelectedCourseId('');
+    setPersistedModuleCount(0);
     setThumbnailPreview(null);
     setForm({
       title: '',
@@ -84,6 +127,8 @@ export default function ManageContentPage() {
 
   const startEdit = (course) => {
     setEditingId(course._id);
+    setSelectedCourseId(course._id);
+    setPersistedModuleCount(Array.isArray(course.modules) ? course.modules.length : 0);
     setThumbnailPreview(getAssetUrl(course.thumbnail) || null);
     setForm({
       title: course.title || '',
@@ -108,6 +153,14 @@ export default function ManageContentPage() {
         }))
         : [{ title: '', durationMinutes: 20, type: 'reading', textContent: '', videoUrl: '', resourceUrl: '', resourceTitle: '' }],
     });
+  };
+
+  const handleSelectCourseToManage = (courseId) => {
+    setSelectedCourseId(courseId);
+    const picked = courses.find((item) => item._id === courseId);
+    if (picked) {
+      startEdit(picked);
+    }
   };
 
   const handleThumbnailChange = async (e) => {
@@ -135,6 +188,13 @@ export default function ManageContentPage() {
     if (!file) return;
     if (!editingId) {
       toast('Select a course and click Edit first', 'error');
+      return;
+    }
+
+    // Uploaded assets are attached to modules that already exist in the database.
+    // New modules must be saved first so their index is persisted server-side.
+    if (moduleIndex >= persistedModuleCount) {
+      toast('Save course content first, then upload files for newly added modules', 'error');
       return;
     }
 
@@ -173,24 +233,35 @@ export default function ManageContentPage() {
 
   const submit = async (e) => {
     e.preventDefault();
+    if (!hasCourses) {
+      toast('No courses assigned yet. Ask admin to assign or create a course for you first.', 'error');
+      return;
+    }
     if (!editingId) {
-      toast('Pick one of your courses and click Edit first', 'error');
+      toast('Pick a course to manage before saving content', 'error');
       return;
     }
 
     try {
       const sanitizedAnnouncements = (form.announcements || []).filter((item) => item.title?.trim() && item.message?.trim());
+      const sanitizedModules = (form.modules || []).filter((module) => module.title?.trim());
       const payload = {
         ...form,
         durationHours: Number(form.durationHours),
         announcements: sanitizedAnnouncements,
+        modules: sanitizedModules,
       };
       await instructorService.updateCourse(editingId, payload);
       toast('Course content uploaded to student dashboard successfully');
-      await load();
-      resetForm();
+      const reloadedCourses = await load();
+      setPersistedModuleCount(sanitizedModules.length);
+      const updatedCourse = (reloadedCourses || []).find((course) => course._id === editingId);
+      if (updatedCourse) {
+        startEdit(updatedCourse);
+      }
     } catch (err) {
-      toast(err?.response?.data?.message || 'Failed to save course content', 'error');
+      const details = err?.response?.data?.issues?.[0]?.message || err?.response?.data?.error;
+      toast(details || err?.response?.data?.message || 'Failed to save course content', 'error');
     }
   };
 
@@ -201,7 +272,29 @@ export default function ManageContentPage() {
           <h3 className="mb-2 text-lg font-semibold">Manage Course Content</h3>
           <p className="mb-4 text-xs text-slate-500">Same module workflow as admin, but publishing remains admin-only.</p>
 
+          {!hasCourses && (
+            <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+              No courses found for your account. You can start editing content once at least one course is assigned to you.
+            </div>
+          )}
+
           <form onSubmit={submit} className="space-y-4">
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-700">Course To Manage</label>
+              <select
+                className="w-full rounded-xl border border-slate-200 p-3"
+                value={selectedCourseId}
+                onChange={(e) => handleSelectCourseToManage(e.target.value)}
+                disabled={!hasCourses}
+              >
+                <option value="">{hasCourses ? 'Select a course' : 'No courses available'}</option>
+                {hasCourses && courses.map((course) => (
+                  <option key={course._id} value={course._id}>{course.title}</option>
+                ))}
+              </select>
+            </div>
+
+            <fieldset disabled={!hasCourses} className="space-y-4 disabled:opacity-60">
             <div>
               <label className="mb-2 block text-sm font-medium text-slate-700">Course Category</label>
               <select className="w-full rounded-xl border border-slate-200 p-3" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>
@@ -257,6 +350,16 @@ export default function ManageContentPage() {
               <div className="text-sm font-medium text-slate-700">Course Announcements</div>
               {(form.announcements || []).map((item, idx) => (
                 <div key={`announcement-${idx}`} className="rounded-xl border border-slate-200 p-3">
+                  <div className="mb-2 flex items-center justify-between">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Announcement {idx + 1}</div>
+                    <button
+                      type="button"
+                      onClick={() => removeAnnouncement(idx)}
+                      className="rounded-lg bg-rose-100 px-2 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-200"
+                    >
+                      Remove
+                    </button>
+                  </div>
                   <Input label={`Announcement ${idx + 1} Title`} value={item.title} onChange={(e) => updateAnnouncement(idx, 'title', e.target.value)} />
                   <div className="mt-3">
                     <label className="mb-2 block text-sm font-medium text-slate-700">Message</label>
@@ -271,6 +374,16 @@ export default function ManageContentPage() {
               <div className="text-sm font-medium text-slate-700">Modules</div>
               {form.modules.map((module, idx) => (
                 <div key={idx} className="rounded-xl border border-slate-200 p-3">
+                  <div className="mb-2 flex items-center justify-between">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Lesson {idx + 1}</div>
+                    <button
+                      type="button"
+                      onClick={() => confirmAndRemoveModule(idx)}
+                      className="rounded-lg bg-rose-100 px-2 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-200"
+                    >
+                      Delete Lesson
+                    </button>
+                  </div>
                   <Input label={`Module ${idx + 1} Title`} value={module.title} onChange={(e) => updateModule(idx, 'title', e.target.value)} />
                   <div className="mt-3 grid grid-cols-2 gap-3">
                     <Input label="Minutes" type="number" value={module.durationMinutes} onChange={(e) => updateModule(idx, 'durationMinutes', e.target.value)} />
@@ -307,12 +420,20 @@ export default function ManageContentPage() {
               <Button type="button" variant="secondary" className="w-full" onClick={addModule}>Add Module</Button>
             </div>
 
-            <Button className="w-full">Save Course Content</Button>
+            <Button className="w-full" disabled={!hasCourses}>Save Course Content</Button>
             {editingId && <Button type="button" variant="secondary" className="mt-2 w-full" onClick={resetForm}>Cancel Edit</Button>}
+            </fieldset>
           </form>
         </Card>
 
         <div className="space-y-4 lg:col-span-2">
+          {!hasCourses && (
+            <Card>
+              <h4 className="text-lg font-semibold text-slate-900">No Courses Assigned Yet</h4>
+              <p className="mt-2 text-sm text-slate-600">Your course list is empty. Ask an admin to assign an existing course to your account, or create a new course for you.</p>
+              <Button type="button" variant="secondary" className="mt-4" onClick={load}>Refresh</Button>
+            </Card>
+          )}
           {courses.map((course) => (
             <Card key={course._id}>
               <div className="flex items-start justify-between gap-4">

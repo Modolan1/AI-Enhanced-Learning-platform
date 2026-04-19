@@ -23,7 +23,10 @@ function getAssetUrl(url) {
 export default function ManageCoursesPage() {
   const toast = useToast();
   const [courses, setCourses] = useState([]);
+  const [instructors, setInstructors] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [assignmentSelections, setAssignmentSelections] = useState({});
+  const [assigningCourseId, setAssigningCourseId] = useState('');
   const [editingId, setEditingId] = useState(null);
   const [thumbnailPreview, setThumbnailPreview] = useState(null);
   const [isUploadingThumbnail, setIsUploadingThumbnail] = useState(false);
@@ -38,12 +41,44 @@ export default function ManageCoursesPage() {
   });
 
   const load = async () => {
-    const [courseRes, categoryRes] = await Promise.all([adminService.getCourses(), adminService.getCategories()]);
+    const [courseRes, categoryRes, instructorRes] = await Promise.all([
+      adminService.getCourses(),
+      adminService.getCategories(),
+      adminService.getInstructors(),
+    ]);
     setCourses(courseRes.data);
     setCategories(categoryRes.data);
+    const activeInstructors = (instructorRes.data || []).filter((item) => item.status === 'active');
+    setInstructors(activeInstructors);
+
+    const defaults = (courseRes.data || []).reduce((acc, course) => {
+      acc[course._id] = String(course.createdBy?._id || course.createdBy || '');
+      return acc;
+    }, {});
+    setAssignmentSelections(defaults);
+
     if (!form.category && categoryRes.data[0]) setForm((prev) => ({ ...prev, category: categoryRes.data[0]._id }));
   };
   useEffect(() => { load(); }, []);
+
+  const assignInstructor = async (courseId) => {
+    const instructorId = assignmentSelections[courseId];
+    if (!instructorId) {
+      toast('Select an instructor first', 'error');
+      return;
+    }
+
+    try {
+      setAssigningCourseId(courseId);
+      await adminService.assignCourseInstructor(courseId, instructorId);
+      toast('Course assigned to instructor successfully');
+      await load();
+    } catch (err) {
+      toast(err?.response?.data?.message || 'Failed to assign instructor', 'error');
+    } finally {
+      setAssigningCourseId('');
+    }
+  };
 
   const updateModule = (index, field, value) => {
     const next = [...form.modules];
@@ -421,6 +456,31 @@ export default function ManageCoursesPage() {
                   <h3 className="mt-2 text-xl font-bold text-slate-900">{course.title}</h3>
                   <p className="mt-2 text-sm text-slate-600">{course.description}</p>
                   <div className="mt-3 text-sm text-slate-500">{course.level} • {course.durationHours} hour(s) • {course.modules?.length || 0} modules</div>
+
+                  <div className="mt-3 rounded-xl border border-slate-200 p-3">
+                    <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-600">Assigned Instructor</div>
+                    <div className="grid gap-2 md:grid-cols-[1fr_auto]">
+                      <select
+                        className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                        value={assignmentSelections[course._id] || ''}
+                        onChange={(e) => setAssignmentSelections((prev) => ({ ...prev, [course._id]: e.target.value }))}
+                      >
+                        <option value="">Select active instructor</option>
+                        {instructors.map((instructor) => (
+                          <option key={instructor._id} value={instructor._id}>
+                            {instructor.firstName} {instructor.lastName} ({instructor.email})
+                          </option>
+                        ))}
+                      </select>
+                      <Button
+                        type="button"
+                        onClick={() => assignInstructor(course._id)}
+                        disabled={assigningCourseId === course._id || !assignmentSelections[course._id]}
+                      >
+                        {assigningCourseId === course._id ? 'Assigning...' : 'Assign'}
+                      </Button>
+                    </div>
+                  </div>
 
                   <div className="mt-4 rounded-xl border border-slate-200 p-3">
                     <div className="mb-2 text-sm font-semibold text-slate-800">Student Reviews Moderation</div>

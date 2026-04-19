@@ -117,7 +117,13 @@ export const adminService = {
     const allowedStatuses = ['pending', 'active', 'inactive'];
     const nextStatus = allowedStatuses.includes(data.status) ? data.status : instructor.status;
 
-    return userRepository.updateById(id, {
+    const requestedCourseId = data.requestedCourseId !== undefined
+      ? data.requestedCourseId
+      : (instructor.requestedCourse?._id || instructor.requestedCourse || null);
+
+    const isActivating = instructor.status !== 'active' && nextStatus === 'active';
+
+    const updatedInstructor = await userRepository.updateById(id, {
       firstName: data.firstName,
       lastName: data.lastName,
       email: data.email,
@@ -126,7 +132,19 @@ export const adminService = {
       preferredLearningStyle: data.preferredLearningStyle,
       learningGoal: data.learningGoal,
       status: nextStatus,
+      requestedCourse: requestedCourseId,
     });
+
+    if (isActivating && requestedCourseId) {
+      const chosenCourse = await courseRepository.findById(requestedCourseId);
+      if (!chosenCourse) {
+        throw new Error('Selected course for this instructor was not found');
+      }
+      chosenCourse.createdBy = updatedInstructor._id;
+      await chosenCourse.save();
+    }
+
+    return userRepository.findInstructorById(id);
   },
 
   async deleteInstructor(id) {
@@ -153,6 +171,20 @@ export const adminService = {
     const course = await courseRepository.updateById(id, data);
     if (!course) throw new Error('Course not found');
     return course;
+  },
+  async assignCourseInstructor(courseId, instructorId) {
+    const course = await courseRepository.findById(courseId);
+    if (!course) throw new Error('Course not found');
+
+    const instructor = await userRepository.findInstructorById(instructorId);
+    if (!instructor) throw new Error('Instructor not found');
+
+    if (instructor.status !== 'active') {
+      throw new Error('Only active instructors can be assigned to courses');
+    }
+
+    course.createdBy = instructor._id;
+    return course.save();
   },
   async uploadCourseModuleAsset(file, assetType = 'resource') {
     if (!file) throw new Error('No module asset uploaded');

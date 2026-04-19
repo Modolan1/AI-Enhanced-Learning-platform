@@ -53,3 +53,10 @@ export const submitCourseReviewSchema = z.object({
   rating: z.coerce.number().int().min(1).max(5),
   comment: z.string().trim().max(1000).optional().default(''),
 });
+
+export const refreshRecommendationSchema = z.object({
+  trigger: z.enum([
+    'manual_refresh',
+    'weekly_progress_review',
+  ]).optional().default('manual_refresh'),
+});

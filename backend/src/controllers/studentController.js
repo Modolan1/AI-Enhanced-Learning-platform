@@ -89,7 +89,7 @@ export const getRecommendations = asyncHandler(async (req, res) => {
 });
 
 export const refreshRecommendations = asyncHandler(async (req, res) => {
-  res.json({ success: true, data: await studentService.refreshRecommendations(req.user.userId) });
+  res.json({ success: true, data: await studentService.refreshRecommendations(req.user.userId, req.body || {}) });
 });
 
 export const getDocumentUploadConfig = asyncHandler(async (req, res) => {

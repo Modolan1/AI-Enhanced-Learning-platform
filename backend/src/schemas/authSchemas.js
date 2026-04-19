@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 const SKILL_LEVELS = ['Beginner', 'Intermediate', 'Advanced'];
+const mongoId = z.string().regex(/^[a-f\d]{24}$/i, 'Invalid ID');
 
 export const registerSchema = z.object({
   firstName: z.string().trim().min(1, 'First name is required').max(50),
@@ -13,6 +14,15 @@ export const registerSchema = z.object({
   preferredSubject: z.string().trim().max(100).optional().default(''),
   preferredLearningStyle: z.string().trim().max(100).optional().default(''),
   weeklyLearningGoalHours: z.coerce.number().int().min(1).max(168).optional().default(5),
+  requestedCourseId: mongoId.optional(),
+}).superRefine((data, ctx) => {
+  if (data.role === 'instructor' && !data.requestedCourseId) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Please select a course you want to teach',
+      path: ['requestedCourseId'],
+    });
+  }
 });
 
 export const loginSchema = z.object({

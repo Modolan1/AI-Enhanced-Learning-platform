@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { GoogleLogin } from '@react-oauth/google';
 import { useAuth } from '../../hooks/useAuth';
 import Input from '../../components/common/Input';
 import Button from '../../components/common/Button';
@@ -19,7 +20,7 @@ function getPasswordChecks(password) {
 }
 
 export default function RegisterPage() {
-  const { register } = useAuth();
+  const { register, loginWithGoogle } = useAuth();
   const navigate = useNavigate();
   const [form, setForm] = useState({
     firstName: '', lastName: '', email: '', password: '', role: 'student',
@@ -27,6 +28,7 @@ export default function RegisterPage() {
   });
   const [error, setError] = useState('');
   const [passwordTouched, setPasswordTouched] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
 
   const passwordChecks = getPasswordChecks(form.password);
   const allChecksMet = passwordChecks.every((check) => check.met);
@@ -86,6 +88,34 @@ export default function RegisterPage() {
           {error && <div className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600">{error}</div>}
           <Button className="w-full" type="submit" disabled={passwordTouched && !allChecksMet}>Create Account</Button>
         </form>
+        <div className="my-5 flex items-center gap-3">
+          <span className="h-px flex-1 bg-slate-200" />
+          <span className="text-xs text-slate-400">or sign up with</span>
+          <span className="h-px flex-1 bg-slate-200" />
+        </div>
+        {googleLoading ? (
+          <div className="flex h-10 w-full items-center justify-center rounded-xl border border-slate-200 text-sm text-slate-500">Signing in with Google…</div>
+        ) : (
+          <GoogleLogin
+            onSuccess={async (credentialResponse) => {
+              setGoogleLoading(true);
+              setError('');
+              try {
+                const user = await loginWithGoogle(credentialResponse.credential);
+                navigate(user.role === 'admin' ? '/admin/dashboard' : '/student/dashboard');
+              } catch (err) {
+                setError(err?.response?.data?.message || 'Google sign-up failed');
+              } finally {
+                setGoogleLoading(false);
+              }
+            }}
+            onError={() => setError('Google sign-up failed')}
+            width="100%"
+            text="signup_with"
+            shape="rectangular"
+            logo_alignment="left"
+          />
+        )}
         <p className="mt-4 text-center text-sm text-slate-600">Already registered? <Link to="/" className="font-medium text-indigo-600">Sign in</Link></p>
       </div>
     </div>

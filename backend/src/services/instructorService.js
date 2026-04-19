@@ -143,9 +143,11 @@ export const instructorService = {
     const allCourses = await courseRepository.findAll();
     const allEnrollments = await progressRepository.findAll();
 
-    const instructorCourses = allCourses.filter(course => 
-      course.createdBy?.toString() === instructorId || course.createdBy === instructorId
-    );
+    const instructorCourses = allCourses.filter(course => {
+      const courseOwner = String(course.createdBy?._id || course.createdBy || '');
+      const targetId = String(instructorId || '');
+      return courseOwner === targetId;
+    });
     
     const coursesWithEnrollment = instructorCourses.map((course) => {
       const courseEnrollments = allEnrollments.filter(enrollment => 
@@ -177,7 +179,11 @@ export const instructorService = {
   async getStudentsEnrolled(instructorId) {
     const courses = await courseRepository.findAll();
     const instructorCourseIds = courses
-      .filter(course => course.createdBy?.toString() === instructorId || course.createdBy === instructorId)
+      .filter(course => {
+        const courseOwner = String(course.createdBy?._id || course.createdBy || '');
+        const targetId = String(instructorId || '');
+        return courseOwner === targetId;
+      })
       .map(c => c._id);
 
     if (instructorCourseIds.length === 0) {
@@ -206,7 +212,9 @@ export const instructorService = {
     const course = await courseRepository.findById(payload.courseId);
     if (!course) throw new Error('Course not found');
 
-    const isOwner = String(course.createdBy?._id || course.createdBy) === String(instructorId);
+    const courseOwner = String(course.createdBy?._id || course.createdBy || '');
+    const targetId = String(instructorId || '');
+    const isOwner = courseOwner === targetId;
     if (!isOwner) throw new Error('You can only upload module assets for your own courses');
 
     const modules = course.modules || [];
@@ -244,7 +252,9 @@ export const instructorService = {
     const course = await courseRepository.findById(courseId);
     if (!course) throw new Error('Course not found');
 
-    const isOwner = String(course.createdBy?._id || course.createdBy) === String(instructorId);
+    const courseOwner = String(course.createdBy?._id || course.createdBy || '');
+    const targetId = String(instructorId || '');
+    const isOwner = courseOwner === targetId;
     if (!isOwner) throw new Error('You can only update your own courses');
 
     const safeUpdates = {

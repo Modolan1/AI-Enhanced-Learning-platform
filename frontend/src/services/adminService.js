@@ -1,4 +1,32 @@
 import API from './api';
+
+const assignInstructorWithFallback = async (courseId, instructorId) => {
+  const payload = { instructorId };
+  const attempts = [
+    () => API.put(`/admin/courses/${courseId}/assign-instructor`, payload),
+    () => API.patch(`/admin/courses/${courseId}/assign-instructor`, payload),
+    () => API.post(`/admin/courses/${courseId}/assign-instructor`, payload),
+    () => API.put(`/api/admin/courses/${courseId}/assign-instructor`, payload),
+    () => API.patch(`/api/admin/courses/${courseId}/assign-instructor`, payload),
+    () => API.post(`/api/admin/courses/${courseId}/assign-instructor`, payload),
+  ];
+
+  let lastError;
+  for (const request of attempts) {
+    try {
+      return await request();
+    } catch (error) {
+      lastError = error;
+      const status = error?.response?.status;
+      if (status && status !== 404 && status !== 405) {
+        throw error;
+      }
+    }
+  }
+
+  throw lastError || new Error('Unable to assign instructor');
+};
+
 export const adminService = {
   getDashboard: async () => (await API.get('/admin/dashboard')).data,
   getProfile: async () => (await API.get('/admin/profile')).data,
@@ -19,6 +47,7 @@ export const adminService = {
   getCourses: async () => (await API.get('/admin/courses')).data,
   createCourse: async (payload) => (await API.post('/admin/courses', payload)).data,
   updateCourse: async (id, payload) => (await API.put(`/admin/courses/${id}`, payload)).data,
+  assignCourseInstructor: async (id, instructorId) => (await assignInstructorWithFallback(id, instructorId)).data,
   deleteCourse: async (id) => (await API.delete(`/admin/courses/${id}`)).data,
   uploadCourseThumbnail: async (file) => {
     const formData = new FormData();

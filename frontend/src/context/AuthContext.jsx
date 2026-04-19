@@ -24,6 +24,16 @@ export function AuthProvider({ children }) {
     return nextUser;
   };
 
+  const loginWithGoogle = async (idToken) => {
+    const result = await authService.googleAuth(idToken);
+    const nextUser = result.data.user;
+    const token = result.data.token;
+    setUser(nextUser);
+    localStorage.setItem('pls_user', JSON.stringify(nextUser));
+    localStorage.setItem('pls_token', token);
+    return nextUser;
+  };
+
   const register = async (payload) => {
     const result = await authService.register(payload);
     const data = result.data;
@@ -42,7 +52,7 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, loginWithGoogle, register, logout }}>
       {children}
     </AuthContext.Provider>
   );

@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { ListVideo } from 'lucide-react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import StudentLayout from '../../layouts/StudentLayout';
 import { studentService } from '../../services/studentService';
@@ -56,11 +57,15 @@ export default function MyCourseOverviewPage() {
 
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
-  const [activeTab, setActiveTab] = useState('overview');
+  const [activeTab, setActiveTab] = useState('');
   const [activeModuleIndex, setActiveModuleIndex] = useState(0);
-  const [activeVideo, setActiveVideo] = useState(null); // { url, title, source }
+  const [activeVideo, setActiveVideo] = useState(null); // { url, title, source, lessonIndex }
+  const [isVideoListOpen, setIsVideoListOpen] = useState(false);
+  const [completingLessonIndex, setCompletingLessonIndex] = useState(null);
   const [reviewForm, setReviewForm] = useState({ rating: 5, comment: '' });
   const [submittingReview, setSubmittingReview] = useState(false);
+  const videoMenuRef = useRef(null);
+  const tabPanelRef = useRef(null);
 
   const load = async () => {
     try {
@@ -89,6 +94,50 @@ export default function MyCourseOverviewPage() {
     load();
   }, [id, navigate]);
 
+  useEffect(() => {
+    if (!isVideoListOpen) return;
+
+    const handleDocumentClick = (event) => {
+      if (!videoMenuRef.current?.contains(event.target)) {
+        setIsVideoListOpen(false);
+      }
+    };
+
+    const handleEscape = (event) => {
+      if (event.key === 'Escape') setIsVideoListOpen(false);
+    };
+
+    document.addEventListener('mousedown', handleDocumentClick);
+    document.addEventListener('keydown', handleEscape);
+
+    return () => {
+      document.removeEventListener('mousedown', handleDocumentClick);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [isVideoListOpen]);
+
+  useEffect(() => {
+    if (!activeTab) return;
+
+    const handleDocumentClick = (event) => {
+      if (!tabPanelRef.current?.contains(event.target)) {
+        setActiveTab('');
+      }
+    };
+
+    const handleEscape = (event) => {
+      if (event.key === 'Escape') setActiveTab('');
+    };
+
+    document.addEventListener('mousedown', handleDocumentClick);
+    document.addEventListener('keydown', handleEscape);
+
+    return () => {
+      document.removeEventListener('mousedown', handleDocumentClick);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [activeTab]);
+
   const modules = data?.lessons || [];
   const course = data?.course;
   const progress = data?.progress;
@@ -104,6 +153,29 @@ export default function MyCourseOverviewPage() {
   const instructorDocuments = useMemo(() => {
     return (data?.learningContent || []).filter((item) => item.contentType === 'document' && item.fileUrl);
   }, [data]);
+
+  const storedVideos = useMemo(() => {
+    const moduleVideos = modules
+      .filter((m) => m.videoUrl)
+      .map((m, i) => ({
+        key: `module-${i}`,
+        url: m.videoUrl,
+        title: m.title,
+        source: `Module ${i + 1}`,
+        badge: 'Module',
+        lessonIndex: i,
+      }));
+
+    const instructorVideoItems = instructorVideos.map((item) => ({
+      key: `instructor-${item._id}`,
+      url: item.videoUrl,
+      title: item.title,
+      source: `${item.instructor?.firstName || 'Instructor'} ${item.instructor?.lastName || ''}`.trim(),
+      badge: 'Instructor',
+    }));
+
+    return [...moduleVideos, ...instructorVideoItems];
+  }, [instructorVideos, modules]);
 
   const moduleDocuments = useMemo(() => {
     return modules
@@ -198,8 +270,8 @@ export default function MyCourseOverviewPage() {
     : (selectedModule?.title || course.title);
   const embedUrl = toEmbedUrl(currentVideoUrl);
 
-  const playVideo = (url, title, source) => {
-    setActiveVideo({ url: resolveAssetUrl(url), title, source });
+  const playVideo = (url, title, source, lessonIndex) => {
+    setActiveVideo({ url: resolveAssetUrl(url), title, source, lessonIndex });
   };
 
   const clearActiveVideo = (moduleIndex) => {
@@ -207,12 +279,98 @@ export default function MyCourseOverviewPage() {
     setActiveVideo(null);
   };
 
+  const markLessonComplete = async (lessonIndex) => {
+    if (!Number.isInteger(lessonIndex) || lessonIndex < 0) return;
+    if (completedModules >= lessonIndex + 1) return;
+    if (completingLessonIndex === lessonIndex) return;
+
+    try {
+      setCompletingLessonIndex(lessonIndex);
+      const response = await studentService.completeLesson(id, lessonIndex, true);
+      const updatedProgress = response?.data?.progress;
+      if (!updatedProgress) return;
+
+      setData((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          progress: {
+            ...prev.progress,
+            ...updatedProgress,
+          },
+        };
+      });
+    } catch (err) {
+      setError(err?.response?.data?.message || 'Unable to update module progress right now.');
+    } finally {
+      setCompletingLessonIndex(null);
+    }
+  };
+
+  const handleMainVideoEnded = () => {
+    if (Number.isInteger(activeVideo?.lessonIndex)) {
+      markLessonComplete(activeVideo.lessonIndex);
+      return;
+    }
+
+    if (!activeVideo) {
+      markLessonComplete(activeModuleIndex);
+    }
+  };
+
   return (
     <StudentLayout>
       <div className="rounded-3xl border border-slate-200 bg-white shadow-sm">
         <div className="grid gap-0 lg:grid-cols-3">
           <div className="lg:col-span-2">
-            <div className="relative overflow-hidden rounded-t-3xl bg-slate-950 lg:rounded-l-3xl lg:rounded-tr-none">
+            <div className="relative overflow-hidden rounded-t-3xl bg-slate-950 lg:rounded-l-3xl lg:rounded-tr-none" ref={videoMenuRef}>
+              <button
+                type="button"
+                onClick={() => setIsVideoListOpen((prev) => !prev)}
+                className="absolute right-4 top-4 z-20 inline-flex items-center gap-2 rounded-lg border border-white/30 bg-black/40 px-3 py-2 text-xs font-semibold text-white backdrop-blur transition hover:bg-black/55"
+              >
+                <ListVideo size={14} /> Videos ({storedVideos.length})
+              </button>
+
+              {isVideoListOpen && (
+                <div className="absolute right-4 top-16 z-20 w-[320px] max-w-[calc(100%-2rem)] rounded-2xl border border-slate-200 bg-white/95 p-3 shadow-xl backdrop-blur">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Stored Videos</p>
+                  {!storedVideos.length && (
+                    <p className="mt-2 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">No videos uploaded yet.</p>
+                  )}
+                  {!!storedVideos.length && (
+                    <div className="mt-2 max-h-72 space-y-2 overflow-auto pr-1">
+                      {storedVideos.map((item) => {
+                        const resolvedUrl = resolveAssetUrl(item.url);
+                        const isActive = currentVideoUrl === resolvedUrl;
+                        return (
+                          <button
+                            key={item.key}
+                            type="button"
+                            onClick={() => {
+                              playVideo(item.url, item.title, item.source, item.lessonIndex);
+                              setIsVideoListOpen(false);
+                              setActiveTab('videos');
+                            }}
+                            className={`w-full rounded-xl border px-3 py-2 text-left transition ${isActive ? 'border-indigo-300 bg-indigo-50' : 'border-slate-200 bg-white hover:bg-slate-50'}`}
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-semibold text-slate-900">{item.title}</p>
+                                <p className="text-xs text-slate-500">{item.source}</p>
+                              </div>
+                              <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${item.badge === 'Module' ? 'bg-emerald-100 text-emerald-700' : 'bg-violet-100 text-violet-700'}`}>
+                                {item.badge}
+                              </span>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {embedUrl ? (
                 <iframe
                   title={currentVideoTitle}
@@ -226,6 +384,7 @@ export default function MyCourseOverviewPage() {
                   key={currentVideoUrl}
                   controls
                   src={currentVideoUrl}
+                  onEnded={handleMainVideoEnded}
                   className="h-64 w-full bg-black md:h-96"
                 />
               ) : thumbnailUrl ? (
@@ -249,32 +408,57 @@ export default function MyCourseOverviewPage() {
               </div>
             </div>
 
-            <div className="border-b border-slate-200 px-4 md:px-6">
-              <div className="flex flex-wrap gap-2 py-3 text-sm">
-                {[
-                  { id: 'overview', label: 'Overview & Notes' },
-                  { id: 'videos', label: 'Videos' },
-                  { id: 'announcements', label: 'Announcements' },
-                  { id: 'reviews', label: 'Reviews' },
-                  { id: 'resources', label: 'Downloadable Resources' },
-                ].map((tab) => (
-                  <button
-                    key={tab.id}
-                    type="button"
-                    onClick={() => setActiveTab(tab.id)}
-                    className={`rounded-full px-4 py-2 font-semibold transition ${
-                      activeTab === tab.id
-                        ? 'bg-slate-900 text-white'
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                    }`}
-                  >
-                    {tab.label}
-                  </button>
-                ))}
+            {/* Fallback "Mark Module Complete" for iframe/embed videos */}
+            {embedUrl && Number.isInteger(activeVideo?.lessonIndex) && (
+              <div className="flex items-center justify-between rounded-b-xl border border-t-0 border-slate-200 bg-slate-50 px-5 py-3">
+                {completedModules >= activeVideo.lessonIndex + 1 ? (
+                  <span className="flex items-center gap-2 text-sm font-semibold text-emerald-600">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                    Module complete
+                  </span>
+                ) : (
+                  <>
+                    <p className="text-xs text-slate-500">Watching an embedded video? Mark it done when finished.</p>
+                    <button
+                      type="button"
+                      disabled={completingLessonIndex === activeVideo.lessonIndex}
+                      onClick={() => markLessonComplete(activeVideo.lessonIndex)}
+                      className="ml-4 shrink-0 rounded-full bg-emerald-600 px-4 py-1.5 text-xs font-semibold text-white shadow transition hover:bg-emerald-700 disabled:opacity-50"
+                    >
+                      {completingLessonIndex === activeVideo.lessonIndex ? 'Saving…' : 'Mark Module Complete'}
+                    </button>
+                  </>
+                )}
               </div>
-            </div>
+            )}
 
-            <div className="p-4 md:p-6">
+            <div ref={tabPanelRef}>
+              <div className="border-b border-slate-200 px-4 md:px-6">
+                <div className="flex flex-wrap gap-2 py-3 text-sm">
+                  {[
+                    { id: 'overview', label: 'Overview & Notes' },
+                    { id: 'videos', label: 'Videos' },
+                    { id: 'announcements', label: 'Announcements' },
+                    { id: 'reviews', label: 'Reviews' },
+                    { id: 'resources', label: 'Downloadable Resources' },
+                  ].map((tab) => (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => setActiveTab((prev) => (prev === tab.id ? '' : tab.id))}
+                      className={`rounded-full px-4 py-2 font-semibold transition ${
+                        activeTab === tab.id
+                          ? 'bg-slate-900 text-white'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      }`}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className={activeTab ? 'p-4 md:p-6' : 'hidden'}>
               {activeTab === 'overview' && (
                 <div className="space-y-5">
                   <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
@@ -333,33 +517,19 @@ export default function MyCourseOverviewPage() {
               )}
 
               {activeTab === 'videos' && (() => {
-                const moduleVideos = modules
-                  .filter((m) => m.videoUrl)
-                  .map((m, i) => ({
-                    key: `module-${i}`,
-                    url: m.videoUrl,
-                    title: m.title,
-                    source: `Module ${i + 1}`,
-                    badge: 'Module',
-                  }));
-                const instructorVideoItems = instructorVideos.map((item) => ({
-                  key: `instructor-${item._id}`,
-                  url: item.videoUrl,
-                  title: item.title,
-                  source: `${item.instructor?.firstName || 'Instructor'} ${item.instructor?.lastName || ''}`.trim(),
-                  badge: 'Instructor',
-                }));
-                const allVideos = [...moduleVideos, ...instructorVideoItems];
-                if (!allVideos.length) {
+                if (!storedVideos.length) {
                   return (
                     <div className="rounded-xl bg-slate-50 p-4 text-sm text-slate-600">No videos uploaded yet.</div>
                   );
                 }
                 return (
                   <div className="space-y-3">
-                    {allVideos.map((v) => {
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                      Videos play only in the dedicated player above. Click the video icon to open all stored videos, then choose one to play.
+                    </div>
+                    {storedVideos.map((v) => {
                       const resolvedUrl = resolveAssetUrl(v.url);
-                      const isActive = activeVideo?.url === resolvedUrl;
+                      const isActive = currentVideoUrl === resolvedUrl;
                       return (
                         <div
                           key={v.key}
@@ -369,7 +539,7 @@ export default function MyCourseOverviewPage() {
                             <button
                               type="button"
                               aria-label={`Play ${v.title}`}
-                              onClick={() => playVideo(v.url, v.title, v.source)}
+                              onClick={() => playVideo(v.url, v.title, v.source, v.lessonIndex)}
                               className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-white transition ${isActive ? 'bg-indigo-700' : 'bg-indigo-600 hover:bg-indigo-700'}`}
                             >
                               {isActive ? '■' : '▶'}
@@ -382,30 +552,7 @@ export default function MyCourseOverviewPage() {
                               {v.badge}
                             </span>
                           </div>
-                          {isActive && (
-                            <div className="mt-3">
-                              {toEmbedUrl(resolvedUrl) ? (
-                                <iframe
-                                  title={v.title}
-                                  src={toEmbedUrl(resolvedUrl)}
-                                  className="w-full rounded-xl"
-                                  style={{ height: '280px' }}
-                                  allow="autoplay; encrypted-media; picture-in-picture"
-                                  allowFullScreen
-                                />
-                              ) : (
-                                <video
-                                  key={resolvedUrl}
-                                  controls
-                                  autoPlay
-                                  src={resolvedUrl}
-                                  className="w-full rounded-xl bg-black"
-                                  style={{ maxHeight: '280px' }}
-                                />
-                              )}
-                              <p className="mt-2 text-xs text-slate-500">Now playing in main player above • scroll up to watch full screen</p>
-                            </div>
-                          )}
+                          {isActive && <p className="mt-2 text-xs text-slate-500">Now playing in the dedicated player above.</p>}
                         </div>
                       );
                     })}
@@ -526,6 +673,7 @@ export default function MyCourseOverviewPage() {
                   ))}
                 </div>
               )}
+              </div>
             </div>
           </div>
 

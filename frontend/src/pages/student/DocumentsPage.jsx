@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Upload, Loader2 } from 'lucide-react';
+import { Upload, Loader2, Trash2 } from 'lucide-react';
 import StudentLayout from '../../layouts/StudentLayout';
 import Card from '../../components/common/Card';
 import Button from '../../components/common/Button';
@@ -37,7 +37,7 @@ function tabLabel(tab) {
   if (tab === 'content') return 'Content';
   if (tab === 'ai-chat') return 'AI Chat';
   if (tab === 'ai-actions') return 'AI Actions';
-  if (tab === 'flashcards') return 'Flashcards';
+  if (tab === 'flashcards') return 'Memory Cards';
   return 'Quiz';
 }
 
@@ -214,8 +214,10 @@ export default function DocumentsPage() {
     downloadFile(`${selectedDoc.fileName.replace(/\.pdf$/i, '')}-attempt-history.csv`, csv, 'text/csv;charset=utf-8;');
   };
 
+  const [deleteConfirmId, setDeleteConfirmId] = useState(null);
+
   const handleDeleteDocument = async (id) => {
-    if (!window.confirm('Delete this document and all its study data?')) return;
+    setDeleteConfirmId(null);
     try {
       await studentService.deleteDocument(id);
       toast('Document deleted successfully');
@@ -319,7 +321,7 @@ export default function DocumentsPage() {
       return (
         <div className="rounded-xl border p-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-sm text-slate-500">AI-Generated Flashcards</p>
+            <p className="text-sm text-slate-500">AI-Generated Memory Cards</p>
             {!!totalFlashcards && (
               <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700">
                 Card {clampedIndex + 1} of {totalFlashcards}
@@ -329,7 +331,7 @@ export default function DocumentsPage() {
 
           {!totalFlashcards && (
             <div className="mt-3 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
-              No flashcards generated for this document yet.
+              No memory cards generated for this document yet.
             </div>
           )}
 
@@ -511,16 +513,19 @@ export default function DocumentsPage() {
         <Card className="xl:col-span-1">
           <h3 className="text-lg font-semibold">Upload New Document</h3>
           <p className="mt-1 text-xs text-slate-500">PDF only. Max size: {formatBytes(maxUploadBytes)}</p>
-          <input
-            type="file"
-            accept="application/pdf,.pdf"
-            className="mt-3 w-full text-sm"
-            onChange={(event) => setDocumentFile(event.target.files?.[0] || null)}
-          />
+          <div className="mt-3 flex items-center gap-2">
+            <Upload className="h-4 w-4 text-indigo-600" />
+            <input
+              type="file"
+              accept="application/pdf,.pdf"
+              className="w-full text-sm"
+              onChange={(event) => setDocumentFile(event.target.files?.[0] || null)}
+            />
+          </div>
           <Button className="mt-3 w-full" disabled={isAnalyzing || !documentFile} onClick={handleAnalyze}>
             {isAnalyzing
               ? <><Loader2 className="inline-block mr-2 h-4 w-4 animate-spin" />Analyzing...</>
-              : <><Upload className="inline-block mr-2 h-4 w-4" />Analyze & Save</>}
+              : <>Analyze & Save</>}
           </Button>
 
           <div className="mt-6">
@@ -551,7 +556,34 @@ export default function DocumentsPage() {
                     <div className="mt-1 text-xs text-slate-500">{formatDate(item.createdAt)}</div>
                     <div className="mt-2 text-xs text-slate-600">Attempts: {item.attemptsCount} {item.latestScore != null ? `• Last score: ${item.latestScore}%` : ''}</div>
                   </button>
-                  <button type="button" className="mt-2 text-xs text-rose-600 hover:underline" onClick={() => handleDeleteDocument(item._id)}>Delete</button>
+                  {deleteConfirmId === item._id ? (
+                    <div className="mt-2 flex items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 px-2 py-1.5">
+                      <p className="flex-1 text-xs font-medium text-rose-700">Delete this document?</p>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteDocument(item._id)}
+                        className="rounded-md bg-rose-600 px-2 py-1 text-[11px] font-semibold text-white transition hover:bg-rose-700"
+                      >
+                        Yes, delete
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDeleteConfirmId(null)}
+                        className="rounded-md border border-slate-300 bg-white px-2 py-1 text-[11px] font-semibold text-slate-600 transition hover:bg-slate-50"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setDeleteConfirmId(item._id)}
+                      className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1 text-xs font-medium text-rose-600 transition hover:border-rose-300 hover:bg-rose-100 hover:text-rose-700"
+                    >
+                      <Trash2 size={12} />
+                      Delete
+                    </button>
+                  )}
                 </div>
               ))}
             </div>

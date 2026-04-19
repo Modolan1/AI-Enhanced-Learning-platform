@@ -13,7 +13,7 @@ export default function FlashcardsPage() {
   useEffect(() => { 
     studentService.getFlashcards()
       .then((res) => { setError(''); setCards(res.data); })
-      .catch((err) => { console.error('Failed to load flashcards:', err); setError('Failed to load flashcards'); });
+      .catch((err) => { console.error('Failed to load memory cards:', err); setError('Failed to load memory cards'); });
   }, []);
   const current = cards[index];
 
@@ -36,6 +36,10 @@ export default function FlashcardsPage() {
   return (
     <StudentLayout>
       <div className="mx-auto max-w-4xl">
+        <div className="mb-4">
+          <h1 className="text-2xl font-bold text-slate-900">Memory Cards</h1>
+          <p className="mt-1 text-sm text-slate-500">Practice with memory cards to improve memory, speed up recall, and feel more confident in quizzes.</p>
+        </div>
         {error && <div className="mb-4 rounded-xl bg-rose-50 p-4 text-rose-700">{error}</div>}
         {current ? (
           <Card className="relative overflow-hidden border border-indigo-100 bg-gradient-to-br from-white via-indigo-50/70 to-cyan-50/70">
@@ -98,7 +102,7 @@ export default function FlashcardsPage() {
             </div>
           </Card>
         ) : (
-          <Card><div className="text-slate-500">No flashcards available yet.</div></Card>
+          <Card><div className="text-slate-500">No memory cards available yet.</div></Card>
         )}
       </div>
     </StudentLayout>
