@@ -3,6 +3,7 @@ import AdminLayout from '../../layouts/AdminLayout';
 import Card from '../../components/common/Card';
 import Input from '../../components/common/Input';
 import Button from '../../components/common/Button';
+import ConfirmDialog from '../../components/common/ConfirmDialog';
 import { adminService } from '../../services/adminService';
 import { useToast } from '../../context/ToastContext';
 
@@ -12,6 +13,7 @@ export default function ManageFlashcardsPage() {
   const [courses, setCourses] = useState([]);
   const [categories, setCategories] = useState([]);
   const [editingId, setEditingId] = useState(null);
+  const [pendingDeleteId, setPendingDeleteId] = useState('');
   const [form, setForm] = useState({ course: '', category: '', question: '', answer: '', difficulty: 'Easy' });
 
   const load = async () => {
@@ -42,6 +44,19 @@ export default function ManageFlashcardsPage() {
       load();
     } catch (err) {
       toast(err?.response?.data?.message || 'Failed to save memory card', 'error');
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!pendingDeleteId) return;
+    try {
+      await adminService.deleteFlashcard(pendingDeleteId);
+      toast('Memory card deleted successfully');
+      if (editingId === pendingDeleteId) setEditingId(null);
+      setPendingDeleteId('');
+      load();
+    } catch (err) {
+      toast(err?.response?.data?.message || 'Failed to delete memory card', 'error');
     }
   };
 
@@ -88,12 +103,20 @@ export default function ManageFlashcardsPage() {
               <div className="mt-3 text-sm text-slate-500">{card.course?.title} • {card.difficulty}</div>
               <div className="mt-4 flex gap-2">
                 <Button variant="secondary" onClick={() => { setEditingId(card._id); setForm({ course: card.course?._id || card.course, category: card.category?._id || card.category, question: card.question, answer: card.answer, difficulty: card.difficulty }); }}>Edit</Button>
-                <Button variant="danger" onClick={async () => { try { await adminService.deleteFlashcard(card._id); toast('Memory card deleted successfully'); if (editingId === card._id) setEditingId(null); load(); } catch (err) { toast(err?.response?.data?.message || 'Failed to delete memory card', 'error'); } }}>Delete</Button>
+                <Button variant="danger" onClick={() => setPendingDeleteId(card._id)}>Delete</Button>
               </div>
             </Card>
           ))}
         </div>
       </div>
+      <ConfirmDialog
+        open={Boolean(pendingDeleteId)}
+        title="Delete memory card"
+        message="Delete this memory card permanently?"
+        confirmText="Delete"
+        onCancel={() => setPendingDeleteId('')}
+        onConfirm={handleDelete}
+      />
     </AdminLayout>
   );
 }

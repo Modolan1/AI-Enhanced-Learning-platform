@@ -3,6 +3,7 @@ import { protect } from '../middleware/authMiddleware.js';
 import { authorizeRoles } from '../middleware/roleMiddleware.js';
 import { validateObjectId } from '../middleware/validateObjectId.js';
 import { uploadModuleAsset, uploadThumbnail } from '../middleware/uploadMiddleware.js';
+import { enforceVideoUploadLimit } from '../middleware/videoUploadLimitMiddleware.js';
 import { validate } from '../middleware/validate.js';
 import {
   updateProfileSchema, updateStudentSchema, updateInstructorSchema,
@@ -43,7 +44,7 @@ router.delete('/categories/:id', validateObjectId, deleteCategory);
 router.get('/analytics/categories', getCategoryAnalytics);
 router.get('/courses', getCourses);
 router.post('/courses/upload/thumbnail', uploadThumbnail.single('thumbnail'), uploadCourseThumbnail);
-router.post('/courses/upload/module-asset', uploadModuleAsset.single('file'), uploadCourseModuleAsset);
+router.post('/courses/upload/module-asset', uploadModuleAsset.single('file'), enforceVideoUploadLimit, uploadCourseModuleAsset);
 router.post('/courses', validate(createCourseSchema), createCourse);
 router.put('/courses/:id', validateObjectId, validate(updateCourseSchema), updateCourse);
 router.patch('/courses/:id/assign-instructor', validateObjectId, validate(assignCourseInstructorSchema), assignCourseInstructor);

@@ -3,6 +3,7 @@ import AdminLayout from '../../layouts/AdminLayout';
 import Card from '../../components/common/Card';
 import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
+import ConfirmDialog from '../../components/common/ConfirmDialog';
 import { adminService } from '../../services/adminService';
 import { useToast } from '../../context/ToastContext';
 
@@ -13,6 +14,7 @@ export default function InstructorsPage() {
   const [editingInstructor, setEditingInstructor] = useState(null);
   const [editForm, setEditForm] = useState({});
   const [error, setError] = useState('');
+  const [pendingDeleteId, setPendingDeleteId] = useState('');
 
   const pendingInstructors = instructors.filter((instructor) => instructor.status === 'pending');
   const activeInstructors = instructors.filter((instructor) => instructor.status === 'active');
@@ -77,12 +79,13 @@ export default function InstructorsPage() {
     }
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('Permanently delete this instructor account?')) return;
+  const handleDelete = async () => {
+    if (!pendingDeleteId) return;
     try {
-      await adminService.deleteInstructor(id);
+      await adminService.deleteInstructor(pendingDeleteId);
       toast('Instructor deleted successfully');
-      if (editingInstructor === id) setEditingInstructor(null);
+      if (editingInstructor === pendingDeleteId) setEditingInstructor(null);
+      setPendingDeleteId('');
       load();
     } catch (err) {
       const msg = err?.response?.data?.message || 'Delete failed.';
@@ -169,7 +172,7 @@ export default function InstructorsPage() {
                       </>
                     )}
                     <Button variant="secondary" onClick={() => startEdit(instructor)}>Edit</Button>
-                    <Button variant="danger" onClick={() => handleDelete(instructor._id)}>Delete</Button>
+                    <Button variant="danger" onClick={() => setPendingDeleteId(instructor._id)}>Delete</Button>
                   </div>
                 </>
               )}
@@ -178,6 +181,14 @@ export default function InstructorsPage() {
           </div>
         )}
       </Card>
+      <ConfirmDialog
+        open={Boolean(pendingDeleteId)}
+        title="Delete instructor"
+        message="Permanently delete this instructor account?"
+        confirmText="Delete"
+        onCancel={() => setPendingDeleteId('')}
+        onConfirm={handleDelete}
+      />
     </AdminLayout>
   );
 }

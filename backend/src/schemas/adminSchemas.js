@@ -4,6 +4,7 @@ const SKILL_LEVELS = ['Beginner', 'Intermediate', 'Advanced'];
 const COURSE_LEVELS = ['Beginner', 'Intermediate', 'Advanced'];
 const DIFFICULTY_LEVELS = ['easy', 'medium', 'hard'];
 const INSTRUCTOR_STATUSES = ['pending', 'active', 'inactive'];
+const MODULE_TYPES = ['video', 'reading', 'exercise', 'project'];
 const mongoId = z.string().regex(/^[a-f\d]{24}$/i, 'Invalid ID');
 
 // ── Profile ──────────────────────────────────────────────────────────────────
@@ -38,6 +39,22 @@ export const updateCategorySchema = z.object({
 });
 
 // ── Course ───────────────────────────────────────────────────────────────────
+const courseAnnouncementSchema = z.object({
+  title: z.string().trim().min(1).max(180),
+  message: z.string().trim().min(1).max(2000),
+  createdAt: z.coerce.date().optional(),
+});
+
+const courseModuleSchema = z.object({
+  title: z.string().trim().min(1, 'Module title is required').max(200),
+  durationMinutes: z.coerce.number().min(0).max(10000).optional().default(20),
+  type: z.enum(MODULE_TYPES).optional().default('reading'),
+  textContent: z.string().trim().max(10000).optional().default(''),
+  videoUrl: z.string().trim().max(500).optional().default(''),
+  resourceUrl: z.string().trim().max(500).optional().default(''),
+  resourceTitle: z.string().trim().max(300).optional().default(''),
+});
+
 export const createCourseSchema = z.object({
   title: z.string().trim().min(1, 'Course title is required').max(200),
   description: z.string().trim().min(1, 'Course description is required').max(2000),
@@ -46,12 +63,8 @@ export const createCourseSchema = z.object({
   durationHours: z.coerce.number().min(0).max(10000),
   thumbnail: z.string().trim().max(500).optional().default(''),
   overviewNotes: z.string().trim().max(5000).optional().default(''),
-  announcements: z.array(z.object({
-    title: z.string().trim().min(1).max(180),
-    message: z.string().trim().min(1).max(2000),
-    createdAt: z.coerce.date().optional(),
-  })).optional().default([]),
-  modules: z.array(z.any()).optional().default([]),
+  announcements: z.array(courseAnnouncementSchema).optional().default([]),
+  modules: z.array(courseModuleSchema).optional().default([]),
   isPublished: z.boolean().optional().default(true),
 });
 

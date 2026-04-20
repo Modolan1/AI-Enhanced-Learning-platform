@@ -3,6 +3,7 @@ import AdminLayout from '../../layouts/AdminLayout';
 import Card from '../../components/common/Card';
 import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
+import ConfirmDialog from '../../components/common/ConfirmDialog';
 import { adminService } from '../../services/adminService';
 import { useToast } from '../../context/ToastContext';
 
@@ -20,6 +21,30 @@ function getAssetUrl(url) {
   return `${apiOrigin}${url.startsWith('/') ? url : `/${url}`}`;
 }
 
+function createEmptyModule() {
+  return {
+    title: '',
+    durationMinutes: 20,
+    type: 'reading',
+    textContent: '',
+    videoUrl: '',
+    resourceUrl: '',
+    resourceTitle: '',
+  };
+}
+
+function normalizeCourseModule(module = {}) {
+  return {
+    title: module.title || '',
+    durationMinutes: Number(module.durationMinutes) || 20,
+    type: module.type || 'reading',
+    textContent: module.textContent || '',
+    videoUrl: module.videoUrl || '',
+    resourceUrl: module.resourceUrl || '',
+    resourceTitle: module.resourceTitle || '',
+  };
+}
+
 export default function ManageCoursesPage() {
   const toast = useToast();
   const [courses, setCourses] = useState([]);
@@ -32,12 +57,13 @@ export default function ManageCoursesPage() {
   const [isUploadingThumbnail, setIsUploadingThumbnail] = useState(false);
   const [uploadingModuleAssetKey, setUploadingModuleAssetKey] = useState('');
   const [moderatingReviewKey, setModeratingReviewKey] = useState('');
+  const [pendingDelete, setPendingDelete] = useState(null);
   const [reportReasons, setReportReasons] = useState({});
   const [form, setForm] = useState({
     title: '', description: '', category: '', level: 'Beginner', durationHours: 1, thumbnail: '', isPublished: true,
     overviewNotes: '',
     announcements: [{ title: '', message: '' }],
-    modules: [{ title: '', durationMinutes: 20, type: 'reading', textContent: '', videoUrl: '', resourceUrl: '', resourceTitle: '' }],
+    modules: [createEmptyModule()],
   });
 
   const load = async () => {
@@ -86,7 +112,7 @@ export default function ManageCoursesPage() {
     setForm({ ...form, modules: next });
   };
 
-  const addModule = () => setForm({ ...form, modules: [...form.modules, { title: '', durationMinutes: 20, type: 'reading', textContent: '', videoUrl: '', resourceUrl: '', resourceTitle: '' }] });
+  const addModule = () => setForm({ ...form, modules: [...form.modules, createEmptyModule()] });
 
   const updateAnnouncement = (index, field, value) => {
     const next = [...form.announcements];
@@ -109,7 +135,7 @@ export default function ManageCoursesPage() {
       isPublished: true,
       overviewNotes: '',
       announcements: [{ title: '', message: '' }],
-      modules: [{ title: '', durationMinutes: 20, type: 'reading', textContent: '', videoUrl: '', resourceUrl: '', resourceTitle: '' }],
+      modules: [createEmptyModule()],
     });
   };
 
@@ -119,8 +145,8 @@ export default function ManageCoursesPage() {
     setForm({
       title: course.title,
       description: course.description,
-      category: course.category?._id || course.category,
-      level: course.level,
+      category: course.category?._id || course.category || categories[0]?._id || '',
+      level: course.level || 'Beginner',
       durationHours: course.durationHours,
       thumbnail: course.thumbnail || '',
       isPublished: course.isPublished ?? true,
@@ -129,16 +155,8 @@ export default function ManageCoursesPage() {
         ? course.announcements.map((item) => ({ title: item.title || '', message: item.message || '' }))
         : [{ title: '', message: '' }],
       modules: course.modules?.length
-        ? course.modules.map((m) => ({
-          title: m.title,
-          durationMinutes: m.durationMinutes,
-          type: m.type,
-          textContent: m.textContent || '',
-          videoUrl: m.videoUrl || '',
-          resourceUrl: m.resourceUrl || '',
-          resourceTitle: m.resourceTitle || '',
-        }))
-        : [{ title: '', durationMinutes: 20, type: 'reading', textContent: '', videoUrl: '', resourceUrl: '', resourceTitle: '' }],
+        ? course.modules.map((m) => normalizeCourseModule(m))
+        : [createEmptyModule()],
     });
   };
 
@@ -168,11 +186,21 @@ export default function ManageCoursesPage() {
   const submit = async (e) => {
     e.preventDefault();
     try {
+      const normalizedCategory = String(form.category || '').trim();
+      if (!normalizedCategory) {
+        toast('Select a category before saving the course', 'error');
+        return;
+      }
+
       const sanitizedAnnouncements = (form.announcements || []).filter((item) => item.title?.trim() && item.message?.trim());
+      const sanitizedModules = (form.modules || []).map((module) => normalizeCourseModule(module));
       const payload = {
         ...form,
+        category: normalizedCategory,
+        level: form.level || 'Beginner',
         durationHours: Number(form.durationHours),
         announcements: sanitizedAnnouncements,
+        modules: sanitizedModules,
       };
       if (editingId) {
         await adminService.updateCourse(editingId, payload);
@@ -269,6 +297,21 @@ export default function ManageCoursesPage() {
     }
   };
 
+  const confirmDelete = async () => {
+    if (!pendingDelete) return;
+
+    if (pendingDelete.type === 'course') {
+      await removeCourse(pendingDelete.courseId);
+      setPendingDelete(null);
+      return;
+    }
+
+    if (pendingDelete.type === 'review') {
+      await removeReview(pendingDelete.courseId, pendingDelete.reviewId);
+      setPendingDelete(null);
+    }
+  };
+
   return (
     <AdminLayout>
       <div className="grid gap-6 lg:grid-cols-3">
@@ -289,7 +332,8 @@ export default function ManageCoursesPage() {
             </div>
             <div>
               <label className="mb-2 block text-sm font-medium text-slate-700">Category</label>
-              <select className="w-full rounded-xl border border-slate-200 p-3" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>
+              <select className="w-full rounded-xl border border-slate-200 p-3" value={form.category || ''} onChange={(e) => setForm({ ...form, category: e.target.value })}>
+                <option value="">Select category</option>
                 {categories.map((category) => <option key={category._id} value={category._id}>{category.name}</option>)}
               </select>
             </div>
@@ -323,7 +367,7 @@ export default function ManageCoursesPage() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="mb-2 block text-sm font-medium text-slate-700">Level</label>
-                <select className="w-full rounded-xl border border-slate-200 p-3" value={form.level} onChange={(e) => setForm({ ...form, level: e.target.value })}>
+                <select className="w-full rounded-xl border border-slate-200 p-3" value={form.level || 'Beginner'} onChange={(e) => setForm({ ...form, level: e.target.value })}>
                   <option>Beginner</option><option>Intermediate</option><option>Advanced</option>
                 </select>
               </div>
@@ -369,7 +413,7 @@ export default function ManageCoursesPage() {
                     <Input label="Minutes" type="number" value={module.durationMinutes} onChange={(e) => updateModule(idx, 'durationMinutes', e.target.value)} />
                     <div>
                       <label className="mb-2 block text-sm font-medium text-slate-700">Type</label>
-                      <select className="w-full rounded-xl border border-slate-200 p-3" value={module.type} onChange={(e) => updateModule(idx, 'type', e.target.value)}>
+                      <select className="w-full rounded-xl border border-slate-200 p-3" value={module.type || 'reading'} onChange={(e) => updateModule(idx, 'type', e.target.value)}>
                         <option value="reading">Reading</option><option value="video">Video</option><option value="exercise">Exercise</option><option value="project">Project</option>
                       </select>
                     </div>
@@ -534,7 +578,7 @@ export default function ManageCoursesPage() {
                                 <button
                                   type="button"
                                   className="rounded-md bg-rose-100 px-2 py-1 text-xs font-semibold text-rose-800"
-                                  onClick={() => removeReview(course._id, review._id)}
+                                  onClick={() => setPendingDelete({ type: 'review', courseId: course._id, reviewId: review._id })}
                                   disabled={moderatingReviewKey === `${course._id}:${review._id}:delete`}
                                 >
                                   Delete
@@ -552,13 +596,21 @@ export default function ManageCoursesPage() {
                   <Button variant={course.isPublished ? "secondary" : "primary"} onClick={() => togglePublish(course._id, course.isPublished)}>
                     {course.isPublished ? '📴 Unpublish' : '📱 Publish'}
                   </Button>
-                  <Button variant="danger" onClick={() => removeCourse(course._id)}>Delete</Button>
+                  <Button variant="danger" onClick={() => setPendingDelete({ type: 'course', courseId: course._id })}>Delete</Button>
                 </div>
               </div>
             </Card>
           ))}
         </div>
       </div>
+      <ConfirmDialog
+        open={Boolean(pendingDelete)}
+        title={pendingDelete?.type === 'review' ? 'Delete review' : 'Delete course'}
+        message={pendingDelete?.type === 'review' ? 'Delete this review permanently?' : 'Delete this course permanently?'}
+        confirmText="Delete"
+        onCancel={() => setPendingDelete(null)}
+        onConfirm={confirmDelete}
+      />
     </AdminLayout>
   );
 }

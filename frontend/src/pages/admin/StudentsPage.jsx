@@ -3,6 +3,7 @@ import AdminLayout from '../../layouts/AdminLayout';
 import Card from '../../components/common/Card';
 import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
+import ConfirmDialog from '../../components/common/ConfirmDialog';
 import { adminService } from '../../services/adminService';
 import { useToast } from '../../context/ToastContext';
 
@@ -12,6 +13,7 @@ export default function StudentsPage() {
   const [editingStudent, setEditingStudent] = useState(null);
   const [editForm, setEditForm] = useState({});
   const [error, setError] = useState('');
+  const [pendingDeleteId, setPendingDeleteId] = useState('');
 
   const load = () => adminService.getStudents().then((res) => setStudents(res.data));
 
@@ -46,12 +48,13 @@ export default function StudentsPage() {
     }
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('Permanently delete this student account?')) return;
+  const handleDelete = async () => {
+    if (!pendingDeleteId) return;
     try {
-      await adminService.deleteStudent(id);
+      await adminService.deleteStudent(pendingDeleteId);
       toast('Student deleted successfully');
-      if (editingStudent === id) setEditingStudent(null);
+      if (editingStudent === pendingDeleteId) setEditingStudent(null);
+      setPendingDeleteId('');
       load();
     } catch (err) {
       const msg = err?.response?.data?.message || 'Delete failed.';
@@ -100,7 +103,7 @@ export default function StudentsPage() {
                   {student.learningGoal && <div className="mt-1 text-xs text-slate-400">Goal: {student.learningGoal}</div>}
                   <div className="mt-3 flex gap-2">
                     <Button variant="secondary" onClick={() => startEdit(student)}>Edit</Button>
-                    <Button variant="danger" onClick={() => handleDelete(student._id)}>Delete</Button>
+                    <Button variant="danger" onClick={() => setPendingDeleteId(student._id)}>Delete</Button>
                   </div>
                 </>
               )}
@@ -108,6 +111,14 @@ export default function StudentsPage() {
           ))}
         </div>
       </Card>
+      <ConfirmDialog
+        open={Boolean(pendingDeleteId)}
+        title="Delete student"
+        message="Permanently delete this student account?"
+        confirmText="Delete"
+        onCancel={() => setPendingDeleteId('')}
+        onConfirm={handleDelete}
+      />
     </AdminLayout>
   );
 }

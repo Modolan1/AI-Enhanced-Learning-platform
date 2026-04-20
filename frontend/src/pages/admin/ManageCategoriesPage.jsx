@@ -3,6 +3,7 @@ import AdminLayout from '../../layouts/AdminLayout';
 import Card from '../../components/common/Card';
 import Input from '../../components/common/Input';
 import Button from '../../components/common/Button';
+import ConfirmDialog from '../../components/common/ConfirmDialog';
 import { adminService } from '../../services/adminService';
 import { useToast } from '../../context/ToastContext';
 
@@ -12,6 +13,7 @@ export default function ManageCategoriesPage() {
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState({ name: '', description: '' });
   const [error, setError] = useState('');
+  const [pendingDeleteId, setPendingDeleteId] = useState('');
 
   const load = async () => {
     const response = await adminService.getCategories();
@@ -53,12 +55,13 @@ export default function ManageCategoriesPage() {
     }
   };
 
-  const removeCategory = async (id) => {
-    if (!window.confirm('Delete this category?')) return;
+  const removeCategory = async () => {
+    if (!pendingDeleteId) return;
     try {
-      await adminService.deleteCategory(id);
+      await adminService.deleteCategory(pendingDeleteId);
       toast('Category deleted successfully');
-      if (editingId === id) resetForm();
+      if (editingId === pendingDeleteId) resetForm();
+      setPendingDeleteId('');
       load();
     } catch (err) {
       const msg = err?.response?.data?.message || 'Unable to delete category.';
@@ -91,13 +94,21 @@ export default function ManageCategoriesPage() {
                 </div>
                 <div className="flex gap-2">
                   <Button variant="secondary" onClick={() => startEdit(category)}>Edit</Button>
-                  <Button variant="danger" onClick={() => removeCategory(category._id)}>Delete</Button>
+                  <Button variant="danger" onClick={() => setPendingDeleteId(category._id)}>Delete</Button>
                 </div>
               </div>
             </Card>
           ))}
         </div>
       </div>
+      <ConfirmDialog
+        open={Boolean(pendingDeleteId)}
+        title="Delete category"
+        message="Delete this category?"
+        confirmText="Delete"
+        onCancel={() => setPendingDeleteId('')}
+        onConfirm={removeCategory}
+      />
     </AdminLayout>
   );
 }

@@ -3,6 +3,7 @@ import { Upload, Loader2, Trash2 } from 'lucide-react';
 import StudentLayout from '../../layouts/StudentLayout';
 import Card from '../../components/common/Card';
 import Button from '../../components/common/Button';
+import ConfirmDialog from '../../components/common/ConfirmDialog';
 import { studentService } from '../../services/studentService';
 import { useToast } from '../../context/ToastContext';
 
@@ -214,10 +215,10 @@ export default function DocumentsPage() {
     downloadFile(`${selectedDoc.fileName.replace(/\.pdf$/i, '')}-attempt-history.csv`, csv, 'text/csv;charset=utf-8;');
   };
 
-  const [deleteConfirmId, setDeleteConfirmId] = useState(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState('');
 
   const handleDeleteDocument = async (id) => {
-    setDeleteConfirmId(null);
+    setDeleteConfirmId('');
     try {
       await studentService.deleteDocument(id);
       toast('Document deleted successfully');
@@ -556,34 +557,14 @@ export default function DocumentsPage() {
                     <div className="mt-1 text-xs text-slate-500">{formatDate(item.createdAt)}</div>
                     <div className="mt-2 text-xs text-slate-600">Attempts: {item.attemptsCount} {item.latestScore != null ? `• Last score: ${item.latestScore}%` : ''}</div>
                   </button>
-                  {deleteConfirmId === item._id ? (
-                    <div className="mt-2 flex items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 px-2 py-1.5">
-                      <p className="flex-1 text-xs font-medium text-rose-700">Delete this document?</p>
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteDocument(item._id)}
-                        className="rounded-md bg-rose-600 px-2 py-1 text-[11px] font-semibold text-white transition hover:bg-rose-700"
-                      >
-                        Yes, delete
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setDeleteConfirmId(null)}
-                        className="rounded-md border border-slate-300 bg-white px-2 py-1 text-[11px] font-semibold text-slate-600 transition hover:bg-slate-50"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => setDeleteConfirmId(item._id)}
-                      className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1 text-xs font-medium text-rose-600 transition hover:border-rose-300 hover:bg-rose-100 hover:text-rose-700"
-                    >
-                      <Trash2 size={12} />
-                      Delete
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => setDeleteConfirmId(item._id)}
+                    className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1 text-xs font-medium text-rose-600 transition hover:border-rose-300 hover:bg-rose-100 hover:text-rose-700"
+                  >
+                    <Trash2 size={12} />
+                    Delete
+                  </button>
                 </div>
               ))}
             </div>
@@ -627,6 +608,14 @@ export default function DocumentsPage() {
           )}
         </Card>
       </div>
+      <ConfirmDialog
+        open={Boolean(deleteConfirmId)}
+        title="Delete document"
+        message="Delete this document and its generated study pack?"
+        confirmText="Delete"
+        onCancel={() => setDeleteConfirmId('')}
+        onConfirm={() => handleDeleteDocument(deleteConfirmId)}
+      />
     </StudentLayout>
   );
 }

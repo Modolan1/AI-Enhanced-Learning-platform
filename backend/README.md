@@ -32,6 +32,7 @@ Set these environment variables in Render:
 - `OPENAI_MODEL` = `gpt-4o-mini`
 - `CLIENT_URLS` = your frontend origin(s), comma-separated
 - `DOCUMENT_UPLOAD_MAX_BYTES` = `5242880`
+- `VIDEO_UPLOAD_MAX_GB` = `0.05` (ops-friendly config, app presents this as ~50 MB to users)
 - `BCRYPT_SALT_ROUNDS` = `12`
 - `PASSWORD_PEPPER` = optional extra secret
 

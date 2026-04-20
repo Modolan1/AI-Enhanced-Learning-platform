@@ -3,6 +3,7 @@ import InstructorLayout from '../../layouts/InstructorLayout';
 import Card from '../../components/common/Card';
 import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
+import ConfirmDialog from '../../components/common/ConfirmDialog';
 import { instructorService } from '../../services/instructorService';
 import { useToast } from '../../context/ToastContext';
 
@@ -24,6 +25,7 @@ export default function ManageContentPage() {
   const [isUploadingThumbnail, setIsUploadingThumbnail] = useState(false);
   const [uploadingModuleAssetKey, setUploadingModuleAssetKey] = useState('');
   const [persistedModuleCount, setPersistedModuleCount] = useState(0);
+  const [pendingDelete, setPendingDelete] = useState(null);
   const [form, setForm] = useState({
     title: '', description: '', category: '', level: 'Beginner', durationHours: 1, thumbnail: '',
     overviewNotes: '',
@@ -86,9 +88,7 @@ export default function ManageContentPage() {
   const confirmAndRemoveModule = (index) => {
     const module = form.modules?.[index];
     const label = module?.title?.trim() || `Lesson ${index + 1}`;
-    const confirmed = window.confirm(`Delete ${label}? This action cannot be undone until you save changes.`);
-    if (!confirmed) return;
-    removeModule(index);
+    setPendingDelete({ type: 'module', index, label });
   };
 
   const updateAnnouncement = (index, field, value) => {
@@ -105,6 +105,17 @@ export default function ManageContentPage() {
       ...form,
       announcements: next.length ? next : [{ title: '', message: '' }],
     });
+  };
+
+  const confirmDelete = () => {
+    if (!pendingDelete) return;
+    if (pendingDelete.type === 'module') {
+      removeModule(pendingDelete.index);
+    }
+    if (pendingDelete.type === 'announcement') {
+      removeAnnouncement(pendingDelete.index);
+    }
+    setPendingDelete(null);
   };
 
   const resetForm = () => {
@@ -354,7 +365,7 @@ export default function ManageContentPage() {
                     <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Announcement {idx + 1}</div>
                     <button
                       type="button"
-                      onClick={() => removeAnnouncement(idx)}
+                      onClick={() => setPendingDelete({ type: 'announcement', index: idx })}
                       className="rounded-lg bg-rose-100 px-2 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-200"
                     >
                       Remove
@@ -454,6 +465,16 @@ export default function ManageContentPage() {
           ))}
         </div>
       </div>
+      <ConfirmDialog
+        open={Boolean(pendingDelete)}
+        title={pendingDelete?.type === 'announcement' ? 'Delete announcement' : 'Delete lesson'}
+        message={pendingDelete?.type === 'announcement'
+          ? 'Delete this announcement from the course content?'
+          : `Delete ${pendingDelete?.label || 'this lesson'}? This action cannot be undone until you save changes.`}
+        confirmText="Delete"
+        onCancel={() => setPendingDelete(null)}
+        onConfirm={confirmDelete}
+      />
     </InstructorLayout>
   );
 }

@@ -143,7 +143,6 @@ export default function HomeEntryPage() {
   const [showQuestionnaire, setShowQuestionnaire] = useState(false);
   const [showRegister, setShowRegister] = useState(false);
   const [showCourseEnrollment, setShowCourseEnrollment] = useState(false);
-  const [showCourseDetails, setShowCourseDetails] = useState(false);
   const [registrationSuccess, setRegistrationSuccess] = useState(null); // { user, dashboardPath }
   const [redirectCountdown, setRedirectCountdown] = useState(4);
   const countdownRef = useRef(null);
@@ -152,7 +151,6 @@ export default function HomeEntryPage() {
 
   const [courses, setCourses] = useState([]);
   const [selectedCourseForEnrollment, setSelectedCourseForEnrollment] = useState(null);
-  const [selectedCourseForDetails, setSelectedCourseForDetails] = useState(null);
   const [coursesLoading, setCoursesLoading] = useState(false);
   const [showAllCourses, setShowAllCourses] = useState(false);
 
@@ -194,6 +192,15 @@ export default function HomeEntryPage() {
       setShowQuestionnaire(true);
     }
   }, [location.pathname]);
+
+  useEffect(() => {
+    if (!location.state?.returnToCourses) return;
+
+    window.setTimeout(() => {
+      coursesSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
+    navigate(location.pathname, { replace: true, state: {} });
+  }, [location.state?.returnToCourses, location.pathname, navigate]);
 
   useEffect(() => {
     const fetchCourses = async () => {
@@ -301,14 +308,8 @@ export default function HomeEntryPage() {
   };
 
   const handleOpenCourseDetails = (course) => {
-    setSelectedCourseForDetails(course);
-    setShowCourseDetails(true);
-  };
-
-  const handleEnrollFromDetails = () => {
-    if (!selectedCourseForDetails) return;
-    setShowCourseDetails(false);
-    handleSelectCourseForEnrollment(selectedCourseForDetails);
+    if (!course?._id) return;
+    navigate(`/courses/${course._id}`);
   };
 
   const toggleCourseVisibility = () => {
@@ -862,69 +863,6 @@ export default function HomeEntryPage() {
             ) : (
               <Button onClick={completeCourseQuestionnaire} disabled={!currentValue}>Continue to Registration</Button>
             )}
-          </div>
-        </Modal>
-      )}
-
-      {showCourseDetails && selectedCourseForDetails && (
-        <Modal title={selectedCourseForDetails.title} onClose={() => setShowCourseDetails(false)}>
-          <div className="space-y-4">
-            {selectedCourseForDetails.thumbnail ? (
-              <img
-                src={getThumbnailUrl(selectedCourseForDetails.thumbnail)}
-                alt={selectedCourseForDetails.title}
-                className="h-52 w-full rounded-xl object-cover"
-              />
-            ) : null}
-
-            <div className="flex flex-wrap items-center gap-2 text-xs">
-              <span className="rounded-full bg-indigo-100 px-3 py-1 font-semibold text-indigo-700">{selectedCourseForDetails.category?.name || 'General'}</span>
-              <span className="rounded-full bg-slate-100 px-3 py-1 font-medium text-slate-600">{selectedCourseForDetails.level}</span>
-              <span className="rounded-full bg-slate-100 px-3 py-1 font-medium text-slate-600">{selectedCourseForDetails.durationHours || 0}h total</span>
-              <span className="rounded-full bg-slate-100 px-3 py-1 font-medium text-slate-600">{selectedCourseForDetails.modules?.length || 0} modules</span>
-            </div>
-
-            <p className="text-sm leading-6 text-slate-700">
-              {selectedCourseForDetails.description || 'This course is designed to help you build practical skills through guided lessons and structured modules.'}
-            </p>
-
-            {selectedCourseForDetails.overviewNotes ? (
-              <div className="rounded-xl border border-indigo-100 bg-indigo-50 p-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-indigo-700">Why this course works</p>
-                <p className="mt-1 text-sm text-slate-700">{selectedCourseForDetails.overviewNotes}</p>
-              </div>
-            ) : null}
-
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">What you will learn</p>
-              <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-700">
-                {(selectedCourseForDetails.modules || []).slice(0, 5).map((module) => (
-                  <li key={module.title}>{module.title}</li>
-                ))}
-                {(!selectedCourseForDetails.modules || selectedCourseForDetails.modules.length === 0) && (
-                  <li>Foundational concepts, guided practice, and real-world application.</li>
-                )}
-              </ul>
-            </div>
-
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-100 bg-amber-50 px-4 py-3">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">Learner trust</p>
-                {Number(selectedCourseForDetails.rating || 0) > 0 ? (
-                  <p className="mt-1 text-sm font-medium text-slate-800">
-                    Rated {Number(selectedCourseForDetails.rating || 0).toFixed(1)} / 5 by {selectedCourseForDetails.reviewCount || 0} learner{selectedCourseForDetails.reviewCount === 1 ? '' : 's'}
-                  </p>
-                ) : (
-                  <p className="mt-1 text-sm font-medium text-slate-700">New course, early learners can get ahead quickly.</p>
-                )}
-              </div>
-              <p className="text-lg font-extrabold text-slate-900">${Number(selectedCourseForDetails.price || 0).toFixed(2)}</p>
-            </div>
-
-            <div className="flex flex-wrap justify-end gap-2 pt-1">
-              <Button variant="secondary" onClick={() => setShowCourseDetails(false)}>Close</Button>
-              <Button onClick={handleEnrollFromDetails}>Enroll in This Course</Button>
-            </div>
           </div>
         </Modal>
       )}

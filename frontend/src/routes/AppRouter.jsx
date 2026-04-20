@@ -27,6 +27,7 @@ import InstructorProfilePage from '../pages/instructor/InstructorProfilePage';
 import ManageContentPage from '../pages/instructor/ManageContentPage';
 import InstructorLoginPage from '../pages/auth/InstructorLoginPage';
 import InstructorRegisterPage from '../pages/auth/InstructorRegisterPage';
+import PublicCourseDetailPage from '../pages/auth/PublicCourseDetailPage';
 
 function ProtectedRoute({ children, roles }) {
   const { user, loading } = useAuth();
@@ -49,6 +50,7 @@ export default function AppRouter() {
       <Route path="/" element={<HomeEntryPage />} />
       <Route path="/login" element={<HomeEntryPage />} />
       <Route path="/register" element={<HomeEntryPage />} />
+      <Route path="/courses/:id" element={<PublicCourseDetailPage />} />
       <Route path="/instructor/login" element={<InstructorLoginPage />} />
       <Route path="/instructor/register" element={<InstructorRegisterPage />} />
 

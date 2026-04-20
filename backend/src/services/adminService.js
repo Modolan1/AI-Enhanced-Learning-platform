@@ -6,6 +6,115 @@ import { progressRepository } from '../repositories/progressRepository.js';
 import { userRepository } from '../repositories/userRepository.js';
 import { flashcardRepository } from '../repositories/flashcardRepository.js';
 
+const COURSE_LEVELS = ['Beginner', 'Intermediate', 'Advanced'];
+const MODULE_TYPES = ['video', 'reading', 'exercise', 'project'];
+const QUIZ_DIFFICULTIES = ['easy', 'medium', 'hard'];
+
+const normalizeQuizQuestion = (question = {}) => {
+  const options = Array.isArray(question.options)
+    ? question.options.map((option) => String(option || '').trim()).filter(Boolean)
+    : [];
+
+  const rawCorrectAnswer = question.correctAnswer;
+  let correctAnswer = Number.parseInt(rawCorrectAnswer, 10);
+
+  if (!Number.isFinite(correctAnswer) && typeof rawCorrectAnswer === 'string') {
+    const matchedIndex = options.findIndex((option) => option === rawCorrectAnswer.trim());
+    correctAnswer = matchedIndex;
+  }
+
+  if (!Number.isFinite(correctAnswer) || correctAnswer < 0) {
+    correctAnswer = 0;
+  }
+
+  if (options.length > 0 && correctAnswer >= options.length) {
+    correctAnswer = options.length - 1;
+  }
+
+  return {
+    questionText: String(question.questionText || '').trim(),
+    options,
+    correctAnswer,
+    explanation: String(question.explanation || '').trim(),
+  };
+};
+
+const normalizeQuizPayload = (data = {}, { partial = false } = {}) => {
+  const payload = {};
+
+  if ('title' in data || !partial) payload.title = String(data.title || '').trim();
+  if ('course' in data || !partial) payload.course = String(data.course?._id || data.course || '').trim();
+
+  if ('difficulty' in data || !partial) {
+    const nextDifficulty = String(data.difficulty || '').trim().toLowerCase();
+    payload.difficulty = QUIZ_DIFFICULTIES.includes(nextDifficulty) ? nextDifficulty : 'easy';
+  }
+
+  if ('questions' in data || !partial) {
+    payload.questions = Array.isArray(data.questions)
+      ? data.questions.map((question) => normalizeQuizQuestion(question)).filter((question) => question.questionText && question.options.length >= 2)
+      : [];
+  }
+
+  return payload;
+};
+
+const normalizeCourseModule = (module = {}) => ({
+  title: String(module.title || '').trim(),
+  durationMinutes: Number.isFinite(Number(module.durationMinutes)) ? Number(module.durationMinutes) : 20,
+  type: MODULE_TYPES.includes(module.type) ? module.type : 'reading',
+  textContent: String(module.textContent || '').trim(),
+  videoUrl: String(module.videoUrl || '').trim(),
+  resourceUrl: String(module.resourceUrl || '').trim(),
+  resourceTitle: String(module.resourceTitle || '').trim(),
+});
+
+const normalizeCourseAnnouncements = (announcements = []) => (
+  Array.isArray(announcements)
+    ? announcements
+      .map((item) => ({
+        title: String(item?.title || '').trim(),
+        message: String(item?.message || '').trim(),
+        createdAt: item?.createdAt,
+      }))
+      .filter((item) => item.title && item.message)
+    : []
+);
+
+const sanitizeCoursePayload = (data = {}, { partial = false } = {}) => {
+  const payload = {};
+
+  if ('title' in data || !partial) payload.title = String(data.title || '').trim();
+  if ('description' in data || !partial) payload.description = String(data.description || '').trim();
+
+  if ('category' in data || !partial) {
+    payload.category = String(data.category?._id || data.category || '').trim();
+  }
+
+  if ('level' in data || !partial) {
+    payload.level = COURSE_LEVELS.includes(data.level) ? data.level : 'Beginner';
+  }
+
+  if ('durationHours' in data || !partial) {
+    const durationHours = Number(data.durationHours);
+    payload.durationHours = Number.isFinite(durationHours) ? durationHours : 1;
+  }
+
+  if ('thumbnail' in data || !partial) payload.thumbnail = String(data.thumbnail || '').trim();
+  if ('overviewNotes' in data || !partial) payload.overviewNotes = String(data.overviewNotes || '').trim();
+  if ('announcements' in data || !partial) payload.announcements = normalizeCourseAnnouncements(data.announcements);
+
+  if ('modules' in data || !partial) {
+    payload.modules = Array.isArray(data.modules)
+      ? data.modules.map((module) => normalizeCourseModule(module)).filter((module) => module.title)
+      : [];
+  }
+
+  if ('isPublished' in data || !partial) payload.isPublished = Boolean(data.isPublished);
+
+  return payload;
+};
+
 const recomputeVisibleReviewStats = (course) => {
   const visibleReviews = (course.reviews || []).filter((item) => !item.isHidden && item.moderationStatus === 'visible');
   const reviewCount = visibleReviews.length;
@@ -39,6 +148,7 @@ export const adminService = {
         flashcards: flashcards.length,
         categories: categories.length,
       },
+      recentQuizzes: quizzes.slice(0, 5),
       recentAttempts: attempts.slice(0, 5),
       progress: progress.slice(0, 5),
     };
@@ -153,22 +263,35 @@ export const adminService = {
     return userRepository.deleteById(id);
   },
 
-  createCourse: (adminId, data) => courseRepository.create({
-    title: data.title,
-    description: data.description,
-    category: data.category,
-    level: data.level,
-    durationHours: data.durationHours,
-    thumbnail: data.thumbnail || '',
-    overviewNotes: data.overviewNotes || '',
-    announcements: data.announcements || [],
-    modules: data.modules || [],
-    createdBy: adminId,
-    isPublished: true,
-  }),
+  async createCourse(adminId, data) {
+    const payload = sanitizeCoursePayload(data);
+    const category = await categoryRepository.findById(payload.category);
+    if (!category) {
+      const error = new Error('Selected category no longer exists. Please choose another category.');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    return courseRepository.create({
+      ...payload,
+      createdBy: adminId,
+      isPublished: data?.isPublished ?? true,
+    });
+  },
   listCourses: () => courseRepository.findAll(),
   updateCourse: async (id, data) => {
-    const course = await courseRepository.updateById(id, data);
+    const payload = sanitizeCoursePayload(data, { partial: true });
+
+    if ('category' in payload) {
+      const category = await categoryRepository.findById(payload.category);
+      if (!category) {
+        const error = new Error('Selected category no longer exists. Please choose another category.');
+        error.statusCode = 400;
+        throw error;
+      }
+    }
+
+    const course = await courseRepository.updateById(id, payload);
     if (!course) throw new Error('Course not found');
     return course;
   },
@@ -261,15 +384,12 @@ export const adminService = {
   },
 
   createQuiz: (adminId, data) => quizRepository.create({
-    title: data.title,
-    course: data.course,
-    difficulty: data.difficulty,
-    questions: data.questions,
+    ...normalizeQuizPayload(data),
     createdBy: adminId,
   }),
   listQuizzes: () => quizRepository.findAll(),
   updateQuiz: async (id, data) => {
-    const quiz = await quizRepository.updateById(id, data);
+    const quiz = await quizRepository.updateById(id, normalizeQuizPayload(data, { partial: true }));
     if (!quiz) throw new Error('Quiz not found');
     return quiz;
   },
