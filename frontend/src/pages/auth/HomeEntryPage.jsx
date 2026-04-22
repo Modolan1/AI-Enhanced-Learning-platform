@@ -6,6 +6,7 @@ import Button from '../../components/common/Button';
 import { useAuth } from '../../hooks/useAuth';
 import { authService } from '../../services/authService';
 import heroStudentOnline from '../../assets/hero-student-online.svg';
+import { getRegistrationErrorDetails } from './registrationErrorMessage';
 
 const apiOrigin = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/api\/?$/, '');
 
@@ -180,7 +181,7 @@ export default function HomeEntryPage() {
     password: '',
     role: 'student',
   });
-  const [registerError, setRegisterError] = useState('');
+  const [registerError, setRegisterError] = useState(null);
   const [passwordTouched, setPasswordTouched] = useState(false);
 
   useEffect(() => {
@@ -369,6 +370,7 @@ export default function HomeEntryPage() {
   const handleRegister = async (event) => {
     event.preventDefault();
     setPasswordTouched(true);
+    setRegisterError(null);
 
     if (!allPasswordChecksMet) return;
 
@@ -382,12 +384,18 @@ export default function HomeEntryPage() {
     try {
       const result = await register(payload);
       if (result?.pendingApproval) {
-        setRegisterError(result.message || 'Registration submitted. Wait for admin approval.');
+        setRegisterError({
+          title: 'Registration submitted',
+          message: result.message || 'Registration submitted. Wait for admin approval.',
+        });
         return;
       }
       const user = result?.user;
       if (!user) {
-        setRegisterError('Registration completed, but login session was not created. Please log in.');
+        setRegisterError({
+          title: 'Registration completed',
+          message: 'Your account was created, but the login session was not started automatically. Please sign in.',
+        });
         return;
       }
       const dashboardPath =
@@ -411,7 +419,7 @@ export default function HomeEntryPage() {
         });
       }, 1000);
     } catch (error) {
-      setRegisterError(error?.response?.data?.message || 'Registration failed');
+      setRegisterError(getRegistrationErrorDetails(error));
     }
   };
 
@@ -911,7 +919,12 @@ export default function HomeEntryPage() {
               </div>
             </div>
 
-            {registerError && <div className="rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{registerError}</div>}
+            {registerError && (
+              <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+                <p className="font-semibold">{registerError.title}</p>
+                <p className="mt-1">{registerError.message}</p>
+              </div>
+            )}
 
             <Button type="submit" className="w-full" disabled={passwordTouched && !allPasswordChecksMet}>Create Account & Go to Dashboard</Button>
           </form>

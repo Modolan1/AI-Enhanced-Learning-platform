@@ -9,6 +9,7 @@ import { flashcardRepository } from '../repositories/flashcardRepository.js';
 const COURSE_LEVELS = ['Beginner', 'Intermediate', 'Advanced'];
 const MODULE_TYPES = ['video', 'reading', 'exercise', 'project'];
 const QUIZ_DIFFICULTIES = ['easy', 'medium', 'hard'];
+const FLASHCARD_DIFFICULTIES = ['easy', 'medium', 'hard'];
 
 const normalizeQuizQuestion = (question = {}) => {
   const options = Array.isArray(question.options)
@@ -57,6 +58,35 @@ const normalizeQuizPayload = (data = {}, { partial = false } = {}) => {
   }
 
   return payload;
+};
+
+const normalizeFlashcardPayload = (data = {}, { partial = false } = {}) => {
+  const payload = {};
+
+  if ('course' in data || !partial) payload.course = String(data.course?._id || data.course || '').trim();
+  if ('category' in data || !partial) payload.category = String(data.category?._id || data.category || '').trim();
+  if ('question' in data || !partial) payload.question = String(data.question || '').trim();
+  if ('answer' in data || !partial) payload.answer = String(data.answer || '').trim();
+
+  if ('difficulty' in data || !partial) {
+    const nextDifficulty = String(data.difficulty || '').trim().toLowerCase();
+    payload.difficulty = FLASHCARD_DIFFICULTIES.includes(nextDifficulty) ? nextDifficulty : 'easy';
+  }
+
+  return payload;
+};
+
+const normalizeFlashcardBatchPayload = (data = {}) => {
+  const shared = normalizeFlashcardPayload(data);
+  const cards = Array.isArray(data.cards) ? data.cards : [];
+
+  return cards
+    .map((card) => normalizeFlashcardPayload({
+      ...shared,
+      question: card?.question,
+      answer: card?.answer,
+    }))
+    .filter((card) => card.question && card.answer);
 };
 
 const normalizeCourseModule = (module = {}) => ({
@@ -399,19 +429,50 @@ export const adminService = {
     return quiz;
   },
 
-  createFlashcard: (adminId, data) => flashcardRepository.create({
-    course: data.course,
-    category: data.category,
-    question: data.question,
-    answer: data.answer,
-    difficulty: data.difficulty,
-    createdBy: adminId,
-  }),
+  createFlashcard: (adminId, data) => {
+    const records = Array.isArray(data.cards)
+      ? normalizeFlashcardBatchPayload(data).map((card) => ({ ...card, createdBy: adminId }))
+      : [{ ...normalizeFlashcardPayload(data), createdBy: adminId }];
+
+    return flashcardRepository.create(records.length === 1 ? records[0] : records);
+  },
   listFlashcards: () => flashcardRepository.findAll(),
   updateFlashcard: async (id, data) => {
-    const flashcard = await flashcardRepository.updateById(id, data);
-    if (!flashcard) throw new Error('Flashcard not found');
-    return flashcard;
+    const hasBatchCards = Array.isArray(data.cards) && data.cards.length > 0;
+
+    if (!hasBatchCards) {
+      const flashcard = await flashcardRepository.updateById(id, normalizeFlashcardPayload(data, { partial: true }));
+      if (!flashcard) throw new Error('Flashcard not found');
+      return flashcard;
+    }
+
+    const existingFlashcard = await flashcardRepository.findById(id);
+    if (!existingFlashcard) throw new Error('Flashcard not found');
+
+    const sharedData = {
+      course: 'course' in data ? data.course : existingFlashcard.course?._id || existingFlashcard.course,
+      category: 'category' in data ? data.category : existingFlashcard.category?._id || existingFlashcard.category,
+      difficulty: 'difficulty' in data ? data.difficulty : existingFlashcard.difficulty,
+    };
+
+    const cards = normalizeFlashcardBatchPayload({ ...sharedData, cards: data.cards });
+    if (!cards.length) throw new Error('At least one memory card is required');
+
+    const [primaryCard, ...extraCards] = cards;
+    const updatedFlashcard = await flashcardRepository.updateById(id, primaryCard);
+    if (!updatedFlashcard) throw new Error('Flashcard not found');
+
+    const createdFlashcards = extraCards.length
+      ? await flashcardRepository.create(extraCards.map((card) => ({
+        ...card,
+        createdBy: existingFlashcard.createdBy?._id || existingFlashcard.createdBy,
+      })))
+      : [];
+
+    return {
+      updated: updatedFlashcard,
+      created: Array.isArray(createdFlashcards) ? createdFlashcards : [createdFlashcards],
+    };
   },
   deleteFlashcard: async (id) => {
     const flashcard = await flashcardRepository.deleteById(id);

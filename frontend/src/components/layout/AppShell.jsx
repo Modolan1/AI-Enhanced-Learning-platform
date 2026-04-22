@@ -98,7 +98,7 @@ export default function AppShell({ children, navItems, title }) {
   };
 
   return (
-    <div className="min-h-screen md:flex">
+    <div className="min-h-screen bg-[#f8f6f1] md:flex">
       <aside className="hidden w-72 flex-col border-r border-slate-800/70 bg-gradient-to-b from-slate-950 via-slate-900 to-teal-950 p-6 text-white md:flex">
         <div className="mb-8 rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-sm">
           <div className="flex items-center gap-2">
@@ -117,7 +117,7 @@ export default function AppShell({ children, navItems, title }) {
           ))}
         </nav>
       </aside>
-      <main className="flex-1 p-4 md:p-6">
+      <main className="flex-1 bg-[#f8f6f1] p-4 md:p-6">
         <header className="relative z-40 mb-6 flex items-center justify-between overflow-visible rounded-2xl border border-slate-200/80 bg-white/90 p-4 shadow-[0_10px_28px_-20px_rgba(15,23,42,0.45)] backdrop-blur">
           <div>
             <h2 className="text-xl font-bold tracking-tight text-slate-900">{title}</h2>

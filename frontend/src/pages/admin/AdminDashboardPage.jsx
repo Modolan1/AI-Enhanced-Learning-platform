@@ -8,14 +8,22 @@ export default function AdminDashboardPage() {
   useEffect(() => { adminService.getDashboard().then((res) => setData(res.data)); }, []);
   if (!data) return <AdminLayout><div>Loading...</div></AdminLayout>;
 
+  const statCardClasses = [
+    'bg-amber-50 border-amber-200/80',
+    'bg-sky-50 border-sky-200/80',
+    'bg-violet-50 border-violet-200/80',
+    'bg-emerald-50 border-emerald-200/80',
+    'bg-rose-50 border-rose-200/80',
+  ];
+
   return (
     <AdminLayout>
       <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-5">
-        <Card><p className="text-sm text-slate-500">Students</p><h3 className="mt-2 text-3xl font-bold">{data.stats.students}</h3></Card>
-        <Card><p className="text-sm text-slate-500">Courses</p><h3 className="mt-2 text-3xl font-bold">{data.stats.courses}</h3></Card>
-        <Card><p className="text-sm text-slate-500">Quizzes</p><h3 className="mt-2 text-3xl font-bold">{data.stats.quizzes}</h3></Card>
-        <Card><p className="text-sm text-slate-500">Memory Cards</p><h3 className="mt-2 text-3xl font-bold">{data.stats.flashcards}</h3></Card>
-        <Card><p className="text-sm text-slate-500">Categories</p><h3 className="mt-2 text-3xl font-bold">{data.stats.categories}</h3></Card>
+        <Card className={statCardClasses[0]}><p className="text-sm text-slate-600">Registered Students</p><h3 className="mt-2 text-3xl font-bold text-slate-900">{data.stats.students}</h3></Card>
+        <Card className={statCardClasses[1]}><p className="text-sm text-slate-600">Featured Courses</p><h3 className="mt-2 text-3xl font-bold text-slate-900">{data.stats.courses}</h3></Card>
+        <Card className={statCardClasses[2]}><p className="text-sm text-slate-600">Generated Quizzes</p><h3 className="mt-2 text-3xl font-bold text-slate-900">{data.stats.quizzes}</h3></Card>
+        <Card className={statCardClasses[3]}><p className="text-sm text-slate-600">Generated Memory Cards</p><h3 className="mt-2 text-3xl font-bold text-slate-900">{data.stats.flashcards}</h3></Card>
+        <Card className={statCardClasses[4]}><p className="text-sm text-slate-600">Categories</p><h3 className="mt-2 text-3xl font-bold text-slate-900">{data.stats.categories}</h3></Card>
       </div>
       <div className="mt-6 grid gap-6 lg:grid-cols-3">
         <Card>

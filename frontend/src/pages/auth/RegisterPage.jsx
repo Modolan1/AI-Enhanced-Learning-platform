@@ -4,6 +4,7 @@ import { GoogleLogin } from '@react-oauth/google';
 import { useAuth } from '../../hooks/useAuth';
 import Input from '../../components/common/Input';
 import Button from '../../components/common/Button';
+import { getRegistrationErrorDetails } from './registrationErrorMessage';
 
 const PASSWORD_MIN = 8;
 const PASSWORD_MAX = 128;
@@ -26,7 +27,7 @@ export default function RegisterPage() {
     firstName: '', lastName: '', email: '', password: '', role: 'student',
     learningGoal: '', skillLevel: 'Beginner', preferredSubject: '', preferredLearningStyle: '', weeklyLearningGoalHours: 5,
   });
-  const [error, setError] = useState('');
+  const [error, setError] = useState(null);
   const [passwordTouched, setPasswordTouched] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
 
@@ -36,17 +37,21 @@ export default function RegisterPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setPasswordTouched(true);
+    setError(null);
     if (!allChecksMet) return;
     try {
       const result = await register(form);
       const user = result?.user;
       if (!user) {
-        setError(result?.message || 'Registration completed. Please wait for approval.');
+        setError({
+          title: 'Registration submitted',
+          message: result?.message || 'Registration completed. Please wait for approval.',
+        });
         return;
       }
       navigate(user.role === 'admin' ? '/admin/dashboard' : '/student/dashboard');
     } catch (err) {
-      setError(err.response?.data?.message || 'Registration failed');
+      setError(getRegistrationErrorDetails(err));
     }
   };
 
@@ -85,7 +90,12 @@ export default function RegisterPage() {
             <Input label="Learning Style" value={form.preferredLearningStyle} onChange={(e) => setForm({ ...form, preferredLearningStyle: e.target.value })} />
           </div>
           <Input label="Learning Goal" value={form.learningGoal} onChange={(e) => setForm({ ...form, learningGoal: e.target.value })} />
-          {error && <div className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600">{error}</div>}
+          {error && (
+            <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+              <p className="font-semibold">{error.title}</p>
+              <p className="mt-1">{error.message}</p>
+            </div>
+          )}
           <Button className="w-full" type="submit" disabled={passwordTouched && !allChecksMet}>Create Account</Button>
         </form>
         <div className="my-5 flex items-center gap-3">
@@ -99,17 +109,20 @@ export default function RegisterPage() {
           <GoogleLogin
             onSuccess={async (credentialResponse) => {
               setGoogleLoading(true);
-              setError('');
+              setError(null);
               try {
                 const user = await loginWithGoogle(credentialResponse.credential);
                 navigate(user.role === 'admin' ? '/admin/dashboard' : '/student/dashboard');
               } catch (err) {
-                setError(err?.response?.data?.message || 'Google sign-up failed');
+                setError(getRegistrationErrorDetails(err, 'Google sign-up failed'));
               } finally {
                 setGoogleLoading(false);
               }
             }}
-            onError={() => setError('Google sign-up failed')}
+            onError={() => setError({
+              title: 'Google sign-up failed',
+              message: 'We could not complete Google sign-up right now. Please try again or register with email and password.',
+            })}
             width="100%"
             text="signup_with"
             shape="rectangular"

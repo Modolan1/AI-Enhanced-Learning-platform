@@ -134,6 +134,14 @@ const buildRecommendationSummary = ({ student, attempts, progress, activities, f
     ? progress.find((item) => String(item?.course?._id || item?.course) === String(context.courseId))
     : progress[0];
 
+  const courseAttempts = context.courseId
+    ? attempts.filter((attempt) => String(attempt?.quiz?.course?._id || attempt?.quiz?.course) === String(context.courseId))
+    : [];
+
+  const courseAvgScore = courseAttempts.length
+    ? Math.round(courseAttempts.reduce((sum, attempt) => sum + Number(attempt?.percentage || 0), 0) / courseAttempts.length)
+    : avgQuizScore;
+
   return {
     avgQuizScore,
     quizAttempts: attempts.length,
@@ -151,7 +159,7 @@ const buildRecommendationSummary = ({ student, attempts, progress, activities, f
     lastCompletedCourse: context.courseCompleted
       ? {
         title: context.courseTitle || latestProgress?.course?.title || 'recent course',
-        score: avgQuizScore,
+        score: courseAvgScore,
       }
       : null,
   };
@@ -856,10 +864,58 @@ export const studentService = {
     const priorAttemptCountForQuiz = priorAttempts.filter((item) => String(item?.quiz?._id || item?.quiz) === String(quizId)).length;
     const trigger = priorAttemptCountForQuiz > 0 ? 'quiz_retake' : 'quiz_attempt';
 
-    let score = 0;
-    quiz.questions.forEach((q, index) => {
-      if (answers[index] === q.correctAnswer) score += 1;
+    const submittedAnswers = Array.isArray(answers) ? answers : [];
+    const normalizedAnswers = quiz.questions.map((question, index) => {
+      const submitted = submittedAnswers[index];
+      const parsed = Number.parseInt(submitted, 10);
+
+      if (Number.isInteger(parsed) && parsed >= 0) {
+        return parsed;
+      }
+
+      if (typeof submitted === 'string') {
+        const submittedText = submitted.trim().toLowerCase();
+        return question.options.findIndex((option) => String(option || '').trim().toLowerCase() === submittedText);
+      }
+
+      return -1;
     });
+
+    const details = quiz.questions.map((question, index) => {
+      const options = Array.isArray(question.options) ? question.options : [];
+      const submittedIndex = normalizedAnswers[index];
+      const selectedAnswer = submittedIndex >= 0 ? options[submittedIndex] : null;
+      const rawCorrectAnswer = question.correctAnswer;
+
+      let correctAnswerIndexes = [];
+      const parsedCorrect = Number.parseInt(rawCorrectAnswer, 10);
+
+      if (Number.isInteger(parsedCorrect) && parsedCorrect >= 0) {
+        correctAnswerIndexes = [parsedCorrect];
+      } else if (typeof rawCorrectAnswer === 'string') {
+        const expectedText = rawCorrectAnswer.trim().toLowerCase();
+        correctAnswerIndexes = options
+          .map((option, optionIndex) => ({ optionText: String(option || '').trim().toLowerCase(), optionIndex }))
+          .filter((item) => item.optionText === expectedText)
+          .map((item) => item.optionIndex);
+      }
+
+      const primaryCorrectIndex = correctAnswerIndexes.length ? correctAnswerIndexes[0] : -1;
+      const isCorrect = correctAnswerIndexes.includes(submittedIndex);
+
+      return {
+        index,
+        questionText: question.questionText,
+        options,
+        selectedAnswerIndex: submittedIndex,
+        selectedAnswer,
+        correctAnswerIndex: primaryCorrectIndex,
+        correctAnswer: primaryCorrectIndex >= 0 ? options[primaryCorrectIndex] : null,
+        isCorrect,
+      };
+    });
+
+    const score = details.reduce((sum, item) => sum + (item.isCorrect ? 1 : 0), 0);
 
     const totalQuestions = quiz.questions.length;
     const percentage = totalQuestions ? Math.round((score / totalQuestions) * 100) : 0;
@@ -867,7 +923,7 @@ export const studentService = {
     const attempt = await quizAttemptRepository.create({
       student: studentId,
       quiz: quizId,
-      answers,
+      answers: normalizedAnswers,
       score,
       totalQuestions,
       percentage,
@@ -909,7 +965,10 @@ export const studentService = {
       });
     }
 
-    return attempt;
+    return {
+      ...attempt.toObject(),
+      details,
+    };
   },
 
   async analyzePdfDocument(studentId, file) {

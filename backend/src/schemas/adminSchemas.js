@@ -97,7 +97,7 @@ export const createQuizSchema = z.object({
 export const updateQuizSchema = createQuizSchema.partial();
 
 // ── Flashcard ────────────────────────────────────────────────────────────────
-export const createFlashcardSchema = z.object({
+const flashcardSchema = z.object({
   course: mongoId,
   category: mongoId,
   question: z.string().trim().min(1, 'Question is required').max(1000),
@@ -105,4 +105,28 @@ export const createFlashcardSchema = z.object({
   difficulty: z.enum(DIFFICULTY_LEVELS),
 });
 
-export const updateFlashcardSchema = createFlashcardSchema.partial();
+export const createFlashcardSchema = z.union([
+  flashcardSchema,
+  z.object({
+    course: mongoId,
+    category: mongoId,
+    difficulty: z.enum(DIFFICULTY_LEVELS),
+    cards: z.array(z.object({
+      question: z.string().trim().min(1, 'Question is required').max(1000),
+      answer: z.string().trim().min(1, 'Answer is required').max(2000),
+    })).min(1, 'At least one memory card is required').max(100),
+  }),
+]);
+
+export const updateFlashcardSchema = z.union([
+  flashcardSchema.partial(),
+  z.object({
+    course: mongoId.optional(),
+    category: mongoId.optional(),
+    difficulty: z.enum(DIFFICULTY_LEVELS).optional(),
+    cards: z.array(z.object({
+      question: z.string().trim().min(1, 'Question is required').max(1000),
+      answer: z.string().trim().min(1, 'Answer is required').max(2000),
+    })).min(1, 'At least one memory card is required').max(100),
+  }),
+]);

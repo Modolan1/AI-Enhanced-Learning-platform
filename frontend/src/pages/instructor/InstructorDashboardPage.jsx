@@ -44,13 +44,20 @@ export default function InstructorDashboardPage() {
     });
   };
 
+  const statCardClasses = [
+    'bg-amber-50 border-amber-200/80',
+    'bg-sky-50 border-sky-200/80',
+    'bg-violet-50 border-violet-200/80',
+    'bg-emerald-50 border-emerald-200/80',
+  ];
+
   return (
     <InstructorLayout>
       <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
-        <Card><p className="text-sm text-slate-500">Total Content</p><h3 className="mt-2 text-3xl font-bold">{data.stats.totalContent}</h3></Card>
-        <Card><p className="text-sm text-slate-500">Videos</p><h3 className="mt-2 text-3xl font-bold">{data.stats.totalVideos}</h3></Card>
-        <Card><p className="text-sm text-slate-500">Documents</p><h3 className="mt-2 text-3xl font-bold">{data.stats.totalDocuments}</h3></Card>
-        <Card><p className="text-sm text-slate-500">Total Views</p><h3 className="mt-2 text-3xl font-bold">{data.stats.totalViews}</h3></Card>
+        <Card className={statCardClasses[0]}><p className="text-sm text-slate-600">Total Content</p><h3 className="mt-2 text-3xl font-bold text-slate-900">{data.stats.totalContent}</h3></Card>
+        <Card className={statCardClasses[1]}><p className="text-sm text-slate-600">Videos</p><h3 className="mt-2 text-3xl font-bold text-slate-900">{data.stats.totalVideos}</h3></Card>
+        <Card className={statCardClasses[2]}><p className="text-sm text-slate-600">Documents</p><h3 className="mt-2 text-3xl font-bold text-slate-900">{data.stats.totalDocuments}</h3></Card>
+        <Card className={statCardClasses[3]}><p className="text-sm text-slate-600">Total Views</p><h3 className="mt-2 text-3xl font-bold text-slate-900">{data.stats.totalViews}</h3></Card>
       </div>
 
       <div className="mt-6">

@@ -96,11 +96,137 @@ function getPerformanceBand(score = 0) {
   return 'at_risk';
 }
 
+function isWebDevelopmentSubject(summary = {}, student = {}) {
+  const subject = String(summary.preferredSubject || student.preferredSubject || '').toLowerCase();
+  const goal = String(summary.learningGoal || student.learningGoal || '').toLowerCase();
+  return subject.includes('web') || goal.includes('web');
+}
+
+const WEB_DEV_PATH = [
+  'HTML and CSS Fundamentals',
+  'JavaScript Essentials',
+  'React Fundamentals',
+  'Node.js and Express.js Fundamentals',
+];
+
+function buildLearningPathMeta({ currentCourse = null, nextCourse = null, status = null } = {}) {
+  return {
+    trackKey: 'web-development',
+    trackLabel: 'Web Development Path',
+    currentCourse,
+    nextCourse,
+    status,
+  };
+}
+
+function getWebPathIndex(courseTitle = '') {
+  const title = String(courseTitle || '').toLowerCase();
+  if (!title) return -1;
+
+  if ((title.includes('html') || title.includes('css')) && title.includes('fundamental')) return 0;
+  if (title.includes('javascript')) return 1;
+  if (title.includes('react')) return 2;
+  if ((title.includes('node') || title.includes('node.js')) && title.includes('express')) return 3;
+
+  return -1;
+}
+
+function buildWebDevelopmentPathRecommendation(student, summary = {}, context = {}) {
+  const trigger = context.trigger || 'manual_refresh';
+  const triggerLabel = TRIGGER_LABELS[trigger] || 'learning update';
+  const score = Number(summary.lastCompletedCourse?.score ?? summary.avgQuizScore ?? 0);
+  const band = getPerformanceBand(score);
+  const completedCourseTitle = summary.lastCompletedCourse?.title || context.courseTitle || '';
+  const currentIndex = getWebPathIndex(completedCourseTitle);
+  const currentCourse = currentIndex >= 0 ? WEB_DEV_PATH[currentIndex] : WEB_DEV_PATH[0];
+  const nextCourse = currentIndex >= 0 && currentIndex < WEB_DEV_PATH.length - 1
+    ? WEB_DEV_PATH[currentIndex + 1]
+    : null;
+
+  if (!summary.completedCourses && trigger === 'manual_refresh') {
+    return {
+      title: `Web Development Path: Start with ${WEB_DEV_PATH[0]}`,
+      reason: `Your current profile suggests a web development track. Start from strong fundamentals before moving to advanced frameworks.` ,
+      suggestedActions: [
+        `Enroll in ${WEB_DEV_PATH[0]}.`,
+        'Complete all modules and take each quiz carefully.',
+        'Target 80% or above in quizzes before moving to JavaScript.',
+      ],
+      learningPath: buildLearningPathMeta({
+        currentCourse: WEB_DEV_PATH[0],
+        nextCourse: WEB_DEV_PATH[1],
+        status: 'ready_to_enroll',
+      }),
+      source: 'rule',
+      decision: { phase: 'web_path', type: 'web_start', track: 'web-development', trigger },
+    };
+  }
+
+  if (band === 'strong') {
+    if (!nextCourse) {
+      return {
+        title: `Excellent work, ${student.firstName} — you completed the full web path`,
+        reason: `During this ${triggerLabel}, your strong score (${score}%) confirms mastery for the current stage in your web development learning journey.`,
+        suggestedActions: [
+          `Great job on ${currentCourse}.`,
+          'Build one portfolio project combining HTML/CSS, JavaScript, React, and Node/Express.',
+          'Start interview-style practice and advanced project deployment topics.',
+        ],
+        learningPath: buildLearningPathMeta({
+          currentCourse,
+          nextCourse: null,
+          status: 'path_completed',
+        }),
+        source: 'rule',
+        decision: { phase: 'web_path', type: 'web_path_completed', track: 'web-development', trigger },
+      };
+    }
+
+    return {
+      title: `Excellent work, ${student.firstName} — you are ready for ${nextCourse}`,
+      reason: `During this ${triggerLabel}, your score (${score}%) is above 80%, so you are ready to progress to the next web development course.`,
+      suggestedActions: [
+        `Great job completing ${currentCourse}.`,
+        `Enroll in ${nextCourse}.`,
+        'In the new course, complete one module and one quiz in your first study session.',
+      ],
+      learningPath: buildLearningPathMeta({
+        currentCourse: nextCourse,
+        nextCourse,
+        status: 'ready_to_enroll',
+      }),
+      source: 'rule',
+      decision: { phase: 'web_path', type: 'web_advance', track: 'web-development', nextCourse, trigger },
+    };
+  }
+
+  return {
+    title: `Review ${currentCourse} before moving forward`,
+    reason: `Your current performance (${score}%) is below the 80% progression target for the web development path. Strengthen your understanding first, then continue.`,
+    suggestedActions: [
+      `Revisit the lessons in ${currentCourse}.`,
+      'Retake quizzes and target at least 80% score.',
+      `After improving performance, proceed to ${nextCourse || 'the next advanced topic'}.`,
+    ],
+    learningPath: buildLearningPathMeta({
+      currentCourse,
+      nextCourse,
+      status: 'review_required',
+    }),
+    source: 'rule',
+    decision: { phase: 'web_path', type: 'web_review_before_advance', track: 'web-development', nextCourse, trigger },
+  };
+}
+
 function getNextCourse(student, summary) {
   return summary.recommendedNextCourse || `Next ${student.preferredSubject || 'core'} course`;
 }
 
 function buildRuleRecommendation(student, summary = {}, context = {}) {
+  if (isWebDevelopmentSubject(summary, student)) {
+    return buildWebDevelopmentPathRecommendation(student, summary, context);
+  }
+
   const phase = getStudentPhase(summary);
   const trigger = context.trigger || 'manual_refresh';
   const triggerLabel = TRIGGER_LABELS[trigger] || 'learning update';
@@ -243,6 +369,7 @@ function sanitizeRecommendation(parsed, fallback) {
     title,
     reason,
     suggestedActions,
+    learningPath: fallback.learningPath || null,
     source: 'ai',
   };
 }
@@ -296,7 +423,9 @@ export const aiRecommendationService = {
   async generateAndSave(student, summary, context = {}) {
     let recommendation = buildRuleRecommendation(student, summary, context);
 
-    if (client && student.recommendationOptIn) {
+    const isDeterministicWebPath = recommendation?.decision?.track === 'web-development';
+
+    if (client && student.recommendationOptIn && !isDeterministicWebPath) {
       try {
         const response = await client.responses.create({
           model: env.openaiModel,
@@ -315,6 +444,7 @@ export const aiRecommendationService = {
       title: recommendation.title,
       reason: recommendation.reason,
       suggestedActions: recommendation.suggestedActions,
+      learningPath: recommendation.learningPath || null,
       source: recommendation.source,
       createdBy: recommendation.source === 'ai' ? 'openai' : 'rule-engine',
     });

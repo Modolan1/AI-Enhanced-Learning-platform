@@ -4,32 +4,64 @@ import Card from '../../components/common/Card';
 import Button from '../../components/common/Button';
 import { studentService } from '../../services/studentService';
 
+function formatDifficulty(value = 'easy') {
+  const normalized = String(value || 'easy').toLowerCase();
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+}
+
 export default function FlashcardsPage() {
   const [cards, setCards] = useState([]);
+  const [selectedCourseId, setSelectedCourseId] = useState('');
   const [index, setIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => { 
     studentService.getFlashcards()
-      .then((res) => { setError(''); setCards(res.data); })
+      .then((res) => {
+        const nextCards = Array.isArray(res.data) ? res.data : [];
+        const firstCourseId = String(nextCards[0]?.course?._id || nextCards[0]?.course || '');
+        setError('');
+        setCards(nextCards);
+        setSelectedCourseId(firstCourseId || '');
+      })
       .catch((err) => { console.error('Failed to load memory cards:', err); setError('Failed to load memory cards'); });
   }, []);
-  const current = cards[index];
+
+  const courseOptions = cards.reduce((acc, card) => {
+    const id = String(card?.course?._id || card?.course || '');
+    if (!id || acc.some((item) => item.id === id)) return acc;
+    acc.push({ id, title: card?.course?.title || 'Untitled course' });
+    return acc;
+  }, []);
+
+  const activeCourseId = selectedCourseId || courseOptions[0]?.id || '';
+  const visibleCards = activeCourseId
+    ? cards.filter((card) => String(card?.course?._id || card?.course || '') === activeCourseId)
+    : [];
+
+  useEffect(() => {
+    setIndex(0);
+    setIsFlipped(false);
+  }, [activeCourseId]);
+
+  const current = visibleCards[index];
 
   const next = async () => {
     try {
       if (current) await studentService.trackFlashcardReview(current._id);
-      setIndex((prev) => (cards.length ? (prev + 1) % cards.length : 0));
+      setIndex((prev) => (visibleCards.length ? (prev + 1) % visibleCards.length : 0));
       setIsFlipped(false);
     } catch (err) {
       console.error('Failed to track review:', err);
     }
   };
 
-  const difficultyClass = current?.difficulty === 'Hard'
+  const normalizedDifficulty = String(current?.difficulty || 'easy').toLowerCase();
+
+  const difficultyClass = normalizedDifficulty === 'hard'
     ? 'bg-rose-100 text-rose-700'
-    : current?.difficulty === 'Medium'
+    : normalizedDifficulty === 'medium'
       ? 'bg-amber-100 text-amber-700'
       : 'bg-emerald-100 text-emerald-700';
 
@@ -40,6 +72,21 @@ export default function FlashcardsPage() {
           <h1 className="text-2xl font-bold text-slate-900">Memory Cards</h1>
           <p className="mt-1 text-sm text-slate-500">Practice with memory cards to improve memory, speed up recall, and feel more confident in quizzes.</p>
         </div>
+        {!!courseOptions.length && (
+          <div className="mb-4 rounded-xl border border-slate-200 bg-white p-4">
+            <label className="mb-2 block text-sm font-medium text-slate-700">Course flashcard set</label>
+            <select
+              className="w-full rounded-xl border border-slate-200 px-4 py-3"
+              value={activeCourseId}
+              onChange={(e) => setSelectedCourseId(e.target.value)}
+            >
+              {courseOptions.map((course) => (
+                <option key={course.id} value={course.id}>{course.title}</option>
+              ))}
+            </select>
+            <p className="mt-2 text-xs text-slate-500">Cards are shown course-by-course so you can review each course in order.</p>
+          </div>
+        )}
         {error && <div className="mb-4 rounded-xl bg-rose-50 p-4 text-rose-700">{error}</div>}
         {current ? (
           <Card className="relative overflow-hidden border border-indigo-100 bg-gradient-to-br from-white via-indigo-50/70 to-cyan-50/70">
@@ -52,14 +99,14 @@ export default function FlashcardsPage() {
                   {current.category?.name || 'General'}
                 </div>
                 <span className={`rounded-full px-3 py-1 text-xs font-semibold ${difficultyClass}`}>
-                  {current.difficulty}
+                  {formatDifficulty(current.difficulty)}
                 </span>
               </div>
 
               <div className="mb-4 h-2 w-full rounded-full bg-slate-200">
                 <div
                   className="h-2 rounded-full bg-gradient-to-r from-indigo-500 to-cyan-500 transition-all duration-500"
-                  style={{ width: `${((index + 1) / cards.length) * 100}%` }}
+                  style={{ width: `${((index + 1) / visibleCards.length) * 100}%` }}
                 />
               </div>
 
@@ -91,7 +138,7 @@ export default function FlashcardsPage() {
               <div className="mt-4 text-sm text-slate-500">Course: {current.course?.title || 'General course'}</div>
 
               <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
-                <div className="text-sm text-slate-500">{index + 1} of {cards.length}</div>
+                <div className="text-sm text-slate-500">{index + 1} of {visibleCards.length}</div>
                 <div className="flex gap-2">
                   <Button variant="secondary" onClick={() => setIsFlipped((prev) => !prev)}>
                     {isFlipped ? 'Show Question' : 'Reveal Answer'}

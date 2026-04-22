@@ -135,6 +135,43 @@ function mapActivity(activity) {
   }
 }
 
+function parseCurrentTrackBadge(recommendations = []) {
+  const webRec = recommendations.find((rec) => rec?.learningPath?.trackKey === 'web-development');
+  const learningPath = webRec?.learningPath;
+
+  if (!learningPath?.currentCourse || !learningPath?.status) return null;
+
+  if (learningPath.status === 'ready_to_enroll') {
+    return {
+      course: learningPath.currentCourse,
+      status: 'Ready to enroll',
+      className: 'border-emerald-200 bg-emerald-50 text-emerald-800',
+    };
+  }
+
+  if (learningPath.status === 'review_required') {
+    return {
+      course: learningPath.currentCourse,
+      status: 'Review required before next course',
+      className: 'border-amber-200 bg-amber-50 text-amber-800',
+    };
+  }
+
+  if (learningPath.status === 'path_completed') {
+    return {
+      course: learningPath.currentCourse,
+      status: 'Path completed',
+      className: 'border-violet-200 bg-violet-50 text-violet-800',
+    };
+  }
+
+  return {
+    course: learningPath.currentCourse,
+    status: 'In progress',
+    className: 'border-indigo-200 bg-indigo-50 text-indigo-800',
+  };
+}
+
 export default function StudentDashboardPage() {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
@@ -208,8 +245,16 @@ export default function StudentDashboardPage() {
   const displayedFlashcards = expandedSections.flashcards ? (data.flashcards || []) : (data.flashcards || []).slice(0, defaultVisibleListCount);
   const displayedEnrolledCourses = expandedSections.enrolledCourses ? (data.progress || []) : (data.progress || []).slice(0, defaultVisibleListCount);
   const displayedSuggestions = expandedSections.suggestions ? (data.recommendations || []) : (data.recommendations || []).slice(0, defaultVisibleListCount);
+  const currentTrackBadge = parseCurrentTrackBadge(data.recommendations || []);
   const displayedCategories = expandedSections.categories ? topCategories : topCategories.slice(0, defaultVisibleListCount);
   const displayedInProgressCourses = expandedSections.inProgressCourses ? (data.progress || []) : (data.progress || []).slice(0, defaultVisibleListCount);
+  const statCardClasses = [
+    'bg-amber-50 border-amber-200/80',
+    'bg-violet-50 border-violet-200/80',
+    'bg-rose-50 border-rose-200/80',
+    'bg-emerald-50 border-emerald-200/80',
+    'bg-cyan-50 border-cyan-200/80',
+  ];
 
   return (
     <StudentLayout>
@@ -229,13 +274,12 @@ export default function StudentDashboardPage() {
         }}>Refresh AI Suggestions</Button>
       </div>
 
-      <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-6">
-        <Card><p className="text-sm text-slate-500">Enrolled Courses</p><h3 className="mt-2 text-3xl font-bold">{data.stats.enrolledCourses || 0}</h3></Card>
-        <Card><p className="text-sm text-slate-500">Completed Modules</p><h3 className="mt-2 text-3xl font-bold">{data.stats.completedModules}</h3></Card>
-          <Card><p className="text-sm text-slate-500">Quiz Average</p><h3 className="mt-2 text-3xl font-bold">{data.stats.avgQuizScore}%</h3></Card>
-          <Card><p className="text-sm text-slate-500">Attempted Quizzes</p><h3 className="mt-2 text-3xl font-bold">{data.stats.quizzes || 0}</h3></Card>
-          <Card><p className="text-sm text-slate-500">Memory Card Views</p><h3 className="mt-2 text-3xl font-bold">{data.stats.flashcards || 0}</h3></Card>
-        <Card><p className="text-sm text-slate-500">Saved Documents</p><h3 className="mt-2 text-3xl font-bold">{data.stats.documents || 0}</h3></Card>
+      <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-5">
+        <Card className={statCardClasses[0]}><p className="text-sm text-slate-600">Enrolled Courses</p><h3 className="mt-2 text-3xl font-bold text-slate-900">{data.stats.enrolledCourses || 0}</h3></Card>
+        <Card className={statCardClasses[1]}><p className="text-sm text-slate-600">Quiz Average</p><h3 className="mt-2 text-3xl font-bold text-slate-900">{data.stats.avgQuizScore}%</h3></Card>
+        <Card className={statCardClasses[2]}><p className="text-sm text-slate-600">Attempted Quizzes</p><h3 className="mt-2 text-3xl font-bold text-slate-900">{data.stats.quizzes || 0}</h3></Card>
+        <Card className={statCardClasses[3]}><p className="text-sm text-slate-600">Available Memory Cards</p><h3 className="mt-2 text-3xl font-bold text-slate-900">{data.stats.flashcards || 0}</h3></Card>
+        <Card className={statCardClasses[4]}><p className="text-sm text-slate-600">Saved Documents</p><h3 className="mt-2 text-3xl font-bold text-slate-900">{data.stats.documents || 0}</h3></Card>
       </div>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-3">
@@ -287,7 +331,8 @@ export default function StudentDashboardPage() {
             {displayedFlashcards.map((card) => (
               <Link key={card._id} to="/student/memory-cards" className="block rounded-xl border p-3 transition hover:border-indigo-300 hover:bg-indigo-50">
                 <div className="text-sm font-medium text-slate-900">{card.question}</div>
-                <div className="text-xs text-slate-500">{card.course?.title}</div>
+                <div className="mt-1 text-xs text-slate-500">{card.course?.title}</div>
+                <div className="mt-2 text-xs text-slate-600 line-clamp-2">{card.answer}</div>
               </Link>
             ))}
             {!data.flashcards?.length && <div className="text-sm text-slate-500">No memory cards for enrolled courses yet.</div>}
@@ -303,23 +348,20 @@ export default function StudentDashboardPage() {
       {data.progress.length > 0 && (
         <div className="mt-6">
           <Card>
-            <h3 className="mb-4 text-lg font-semibold">Your Enrolled Courses</h3>
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-semibold">Your Enrolled Courses</h3>
+                <p className="text-sm text-slate-500">Track module completion and course progress from My Learning.</p>
+              </div>
+              <Link to="/student/my-learning" className="text-xs font-semibold text-indigo-600 hover:underline">Open My Learning →</Link>
+            </div>
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {displayedEnrolledCourses.map((item) => (
                 <Link key={item._id} to={`/student/courses/${item.course?._id}/learn`} className="group">
                   <div className="rounded-xl border p-4 transition hover:border-indigo-300 hover:shadow-md">
                     <h4 className="font-semibold text-slate-900 group-hover:text-indigo-600">{item.course?.title}</h4>
                     <p className="mt-2 text-xs text-slate-500">{item.course?.category?.name}</p>
-                    <div className="mt-3">
-                      <div className="flex items-center justify-between text-xs text-slate-600 mb-1">
-                        <span>Progress</span>
-                        <span>{item.completionPercent}%</span>
-                      </div>
-                      <div className="h-2 rounded-full bg-slate-100">
-                        <div className="h-2 rounded-full bg-indigo-600" style={{ width: `${item.completionPercent}%` }} />
-                      </div>
-                    </div>
-                    <p className="mt-2 text-xs text-slate-500">{item.completedModules} of {item.totalModules} modules</p>
+                    <p className="mt-3 text-sm text-slate-600">Continue learning from the course workspace and view detailed module progress in My Learning.</p>
                   </div>
                 </Link>
               ))}
@@ -336,6 +378,11 @@ export default function StudentDashboardPage() {
       <div className="mt-6 grid gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <h3 className="mb-4 text-lg font-semibold">Personalized Suggestions</h3>
+          {currentTrackBadge && (
+            <div className={`mb-4 rounded-xl border px-3 py-2 text-sm font-medium ${currentTrackBadge.className}`}>
+              Current track: {currentTrackBadge.course} ({currentTrackBadge.status})
+            </div>
+          )}
           <div className="space-y-4">
             {displayedSuggestions.map((rec) => (
               <div key={rec._id} className="rounded-xl border p-4">

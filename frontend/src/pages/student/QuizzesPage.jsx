@@ -19,29 +19,54 @@ export default function QuizzesPage() {
       .then((res) => { setError(null); setQuizzes(res.data); })
       .catch((err) => { console.error('Failed to load quizzes:', err); setError('Failed to load quizzes'); })
   }, []);
+
+  const resolveCorrectAnswerIndex = (question) => {
+    const rawCorrectAnswer = question?.correctAnswer;
+    const parsed = Number.parseInt(rawCorrectAnswer, 10);
+
+    if (Number.isInteger(parsed) && parsed >= 0) {
+      return parsed;
+    }
+
+    if (typeof rawCorrectAnswer === 'string') {
+      return (question?.options || []).findIndex((option) => option === rawCorrectAnswer.trim());
+    }
+
+    return -1;
+  };
+
   const startQuiz = (quiz) => {
     setSelected(quiz);
-    setAnswers(new Array(quiz.questions.length).fill(''));
+    setAnswers(new Array(quiz.questions.length).fill(-1));
     setCurrentQuestionIndex(0);
     setResult(null);
   };
   const submit = async () => {
     try {
       const response = (await studentService.submitQuiz(selected._id, answers)).data;
-    const details = selected.questions.map((question, index) => ({
-      index,
-      questionText: question.questionText,
-      options: question.options,
-      selectedAnswer: answers[index],
-      correctAnswer: question.correctAnswer,
-      isCorrect: answers[index] === question.correctAnswer,
-    }));
-    setResult({ ...response, details });
-    toast(`Quiz submitted! Score: ${response.score}/${response.totalQuestions}`);
+      const details = Array.isArray(response?.details)
+        ? response.details
+        : selected.questions.map((question, index) => {
+          const correctAnswerIndex = resolveCorrectAnswerIndex(question);
+
+          return {
+            index,
+            questionText: question.questionText,
+            options: question.options,
+            selectedAnswerIndex: Number(answers[index]),
+            selectedAnswer: question.options?.[Number(answers[index])] || null,
+            correctAnswerIndex,
+            correctAnswer: question.options?.[correctAnswerIndex] || null,
+            isCorrect: Number(answers[index]) === correctAnswerIndex,
+          };
+        });
+      setResult({ ...response, details });
+      toast(`Quiz submitted! Score: ${response.score}/${response.totalQuestions}`);
     } catch (err) {
       console.error('Failed to submit quiz:', err);
       setError('Failed to submit quiz. Please try again.');
-    }  };
+    }
+  };
 
   const totalQuestions = selected?.questions?.length || 0;
   const currentQuestion = selected?.questions?.[currentQuestionIndex] || null;
@@ -82,7 +107,7 @@ export default function QuizzesPage() {
               <div className="rounded-xl border p-4">
                 <div className="font-medium">{currentQuestionNumber}. {currentQuestion?.questionText || 'No questions available in this quiz.'}</div>
                 <div className="mt-3 space-y-2">{currentQuestion?.options?.map((opt, oi) => (
-                  <label key={oi} className="flex items-center gap-2 text-sm text-slate-700"><input type="radio" name={`q-${currentQuestionIndex}`} value={opt} checked={answers[currentQuestionIndex] === opt} onChange={(e) => { const next = [...answers]; next[currentQuestionIndex] = e.target.value; setAnswers(next); }} />{opt}</label>
+                  <label key={oi} className="flex items-center gap-2 text-sm text-slate-700"><input type="radio" name={`q-${currentQuestionIndex}`} value={oi} checked={Number(answers[currentQuestionIndex]) === oi} onChange={() => { const next = [...answers]; next[currentQuestionIndex] = oi; setAnswers(next); }} />{opt}</label>
                 ))}</div>
               </div>
 
@@ -104,8 +129,8 @@ export default function QuizzesPage() {
                       <div className={`mt-1 text-sm ${item.isCorrect ? 'text-emerald-700' : 'text-rose-700'}`}>{item.isCorrect ? 'Correct' : 'Wrong'}</div>
                       <div className="mt-3 space-y-2">
                         {item.options.map((option, optionIndex) => {
-                          const isCorrectAnswer = option === item.correctAnswer;
-                          const isWrongSelected = option === item.selectedAnswer && !item.isCorrect;
+                          const isCorrectAnswer = optionIndex === item.correctAnswerIndex;
+                          const isWrongSelected = optionIndex === item.selectedAnswerIndex && !item.isCorrect;
                           const classes = isCorrectAnswer
                             ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
                             : isWrongSelected

@@ -5,7 +5,7 @@ const flashcardSchema = new mongoose.Schema({
   category: { type: mongoose.Schema.Types.ObjectId, ref: 'Category', required: true },
   question: { type: String, required: true, trim: true },
   answer: { type: String, required: true, trim: true },
-  difficulty: { type: String, enum: ['Easy', 'Medium', 'Hard'], default: 'Easy' },
+  difficulty: { type: String, enum: ['easy', 'medium', 'hard'], default: 'easy' },
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
 }, { timestamps: true });
 
