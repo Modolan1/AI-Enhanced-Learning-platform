@@ -1,0 +1,22 @@
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      nodejs: 18
+    commands:
+      - echo "Installing backend dependencies"
+      - npm ci
+
+  build:
+    commands:
+      - echo "Preparing backend deployment artifact"
+
+artifacts:
+  files:
+    - '**/*'
+    - '!node_modules/**/*'
+
+cache:
+  paths:
+    - node_modules/**/*
