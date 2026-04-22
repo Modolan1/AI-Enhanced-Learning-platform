@@ -12,7 +12,6 @@ import { aiRecommendationService } from './aiRecommendationService.js';
 import { aiDocumentService } from './aiDocumentService.js';
 import { stripeService } from './stripeService.js';
 import { env } from '../config/env.js';
-import { PDFParse } from 'pdf-parse';
 
 const DEFAULT_FAQ = [
   {
@@ -28,6 +27,33 @@ const DEFAULT_FAQ = [
     answer: 'Aim for quick reviews within 24 hours, then again after 3 days and 7 days for better long-term retention.',
   },
 ];
+
+async function extractPdfText(fileBuffer) {
+  let pdfModule;
+
+  try {
+    pdfModule = await import('pdf-parse');
+  } catch (error) {
+    throw new Error('PDF parser failed to load on this server. Try Node.js 20 platform on Elastic Beanstalk or install native canvas dependencies.');
+  }
+
+  // pdf-parse v2 API
+  if (pdfModule?.PDFParse) {
+    const parser = new pdfModule.PDFParse({ data: fileBuffer });
+    try {
+      return await parser.getText();
+    } finally {
+      await parser.destroy();
+    }
+  }
+
+  // pdf-parse v1 API
+  if (typeof pdfModule?.default === 'function') {
+    return await pdfModule.default(fileBuffer);
+  }
+
+  throw new Error('Unsupported pdf-parse module format.');
+}
 
 const buildLessonText = (courseTitle, module, index) => {
   if (module.textContent) return module.textContent;
@@ -983,14 +1009,7 @@ export const studentService = {
       throw new Error(`You can upload up to ${NON_ENROLLED_DOCUMENT_UPLOAD_LIMIT} documents before enrolling in a course. Enroll in any course to upload more.`);
     }
 
-    const parser = new PDFParse({ data: file.buffer });
-    let parsed;
-
-    try {
-      parsed = await parser.getText();
-    } finally {
-      await parser.destroy();
-    }
+    const parsed = await extractPdfText(file.buffer);
 
     const text = (parsed?.text || '').trim();
     if (!text) throw new Error('Could not extract text from PDF. Please upload a text-based PDF document.');
