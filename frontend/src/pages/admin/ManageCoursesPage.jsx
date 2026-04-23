@@ -6,8 +6,7 @@ import Input from '../../components/common/Input';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
 import { adminService } from '../../services/adminService';
 import { useToast } from '../../context/ToastContext';
-
-const apiOrigin = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/api\/?$/, '');
+import { apiOrigin } from '../../services/apiConfig';
 
 function getThumbnailUrl(thumbnail) {
   if (!thumbnail) return '';

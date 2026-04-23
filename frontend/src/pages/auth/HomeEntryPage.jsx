@@ -7,8 +7,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { authService } from '../../services/authService';
 import heroStudentOnline from '../../assets/hero-student-online.svg';
 import { getRegistrationErrorDetails } from './registrationErrorMessage';
-
-const apiOrigin = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/api\/?$/, '');
+import { apiOrigin } from '../../services/apiConfig';
 
 function getThumbnailUrl(thumbnail) {
   if (!thumbnail) return '';

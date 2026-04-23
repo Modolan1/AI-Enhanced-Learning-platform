@@ -2,11 +2,11 @@ import { useEffect, useState } from 'react';
 import StudentLayout from '../../layouts/StudentLayout';
 import Card from '../../components/common/Card';
 import { studentService } from '../../services/studentService';
+import { apiOrigin } from '../../services/apiConfig';
 
 function getVideoUrl(item) {
-  const baseUrl = import.meta.env.VITE_API_BASE_URL?.replace('/api', '') || '';
   if (!item?.videoUrl) return '';
-  if (item.videoUrl.startsWith('/uploads')) return `${baseUrl}${item.videoUrl}`;
+  if (item.videoUrl.startsWith('/uploads')) return `${apiOrigin}${item.videoUrl}`;
   return item.videoUrl;
 }
 

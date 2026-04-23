@@ -3,13 +3,12 @@ import { ListVideo } from 'lucide-react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import StudentLayout from '../../layouts/StudentLayout';
 import { studentService } from '../../services/studentService';
+import { apiOrigin } from '../../services/apiConfig';
 
 function resolveAssetUrl(url) {
   if (!url) return '';
   if (/^https?:\/\//i.test(url)) return url;
-  const apiBase = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
-  const origin = apiBase.replace(/\/api\/?$/, '');
-  return `${origin}${url.startsWith('/') ? '' : '/'}${url}`;
+  return `${apiOrigin}${url.startsWith('/') ? '' : '/'}${url}`;
 }
 
 function toEmbedUrl(url) {

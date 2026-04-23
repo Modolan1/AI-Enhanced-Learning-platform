@@ -3,8 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import Button from '../../components/common/Button';
 import { authService } from '../../services/authService';
-
-const apiOrigin = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/api\/?$/, '');
+import { apiOrigin } from '../../services/apiConfig';
 
 function getThumbnailUrl(thumbnail) {
   if (!thumbnail) return '';
